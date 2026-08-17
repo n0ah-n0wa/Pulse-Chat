@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "display": "Pulse Chat NestJS application",
+  "extends": "./base.json",
+  "compilerOptions": {
+    // The package has no "type" field, so NodeNext emits CommonJS (what Nest
+    // expects) while resolving dependencies through their "exports" maps and
+    // allowing ESM-only packages to be required on Node >= 22.12.
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "types": ["node"],
+
+    // NestJS resolves providers from decorator metadata emitted by the compiler.
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true,
+
+    "declaration": false,
+    "removeComments": true
+  }
+}

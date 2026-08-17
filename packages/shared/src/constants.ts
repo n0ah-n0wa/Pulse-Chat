@@ -1,0 +1,26 @@
+/**
+ * Values that both the frontend and the backend must agree on.
+ *
+ * The backend is the only authority for validation, but the frontend needs the
+ * same numbers to give immediate feedback, so they live here instead of being
+ * duplicated. Every value is taken directly from SPECIFICATION.md.
+ */
+
+/** Product name, used in page titles, API metadata and logs. */
+export const APP_NAME = 'Pulse Chat';
+
+/** Maximum length of a chat message, in characters (specification section 13). */
+export const MESSAGE_MAX_LENGTH = 4000;
+
+/** Default page size for cursor-paginated message history (section 20). */
+export const MESSAGE_PAGE_SIZE_DEFAULT = 50;
+
+/** Largest page size a client may request for message history (section 20). */
+export const MESSAGE_PAGE_SIZE_MAX = 100;
+
+/** Username length bounds (section 7). */
+export const USERNAME_MIN_LENGTH = 3;
+export const USERNAME_MAX_LENGTH = 32;
+
+/** Milliseconds of inactivity after which a typing indicator expires (section 28). */
+export const TYPING_TIMEOUT_MS = 1500;

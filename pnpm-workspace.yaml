@@ -1,0 +1,9 @@
+packages:
+  - apps/*
+  - packages/*
+
+# pnpm blocks dependency lifecycle scripts by default. These packages ship
+# prebuilt native binaries that their install script links, so they are allowed.
+allowBuilds:
+  '@swc/core': true
+  esbuild: true

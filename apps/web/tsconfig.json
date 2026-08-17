@@ -1,0 +1,4 @@
+{
+  "extends": "@pulse-chat/config/tsconfig/react.json",
+  "include": ["src", "vite.config.ts"]
+}

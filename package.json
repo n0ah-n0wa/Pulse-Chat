@@ -1,0 +1,26 @@
+{
+  "name": "pulse-chat",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Pulse Chat - real-time chat platform monorepo",
+  "license": "MIT",
+  "packageManager": "pnpm@11.22.0",
+  "engines": {
+    "node": "^22.13.0 || >=24.0.0",
+    "pnpm": ">=11"
+  },
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "verify": "turbo run lint typecheck test build",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
+  },
+  "devDependencies": {
+    "prettier": "^3.9.6",
+    "turbo": "^2.10.10"
+  }
+}

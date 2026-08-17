@@ -1,0 +1,7 @@
+{
+  "extends": "@pulse-chat/config/tsconfig/nest.json",
+  "compilerOptions": {
+    "noEmit": true
+  },
+  "include": ["src", "vitest.config.mts"]
+}

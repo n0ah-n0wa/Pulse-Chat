@@ -1,0 +1,37 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build output
+dist/
+build/
+out/
+*.tsbuildinfo
+
+# Caches
+.turbo/
+.cache/
+.eslintcache
+.vite/
+
+# Test output
+coverage/
+test-results/
+playwright-report/
+
+# Environment (never commit secrets; commit *.example files instead)
+.env
+.env.*
+!.env.example
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# Editors and OS
+.idea/
+.DS_Store
+Thumbs.db
+*.swp

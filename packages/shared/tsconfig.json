@@ -1,0 +1,7 @@
+{
+  "extends": "@pulse-chat/config/tsconfig/library.json",
+  "compilerOptions": {
+    "noEmit": true
+  },
+  "include": ["src", "vitest.config.ts"]
+}
