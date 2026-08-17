@@ -163,9 +163,6 @@ importers:
       '@pulse-chat/eslint-config':
         specifier: workspace:*
         version: link:../eslint-config
-      '@types/node':
-        specifier: ^22.20.1
-        version: 22.20.1
       eslint:
         specifier: ^10.8.1
         version: 10.8.1(jiti@2.7.0)(supports-color@8.1.1)

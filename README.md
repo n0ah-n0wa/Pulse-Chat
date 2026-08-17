@@ -54,6 +54,7 @@ All commands run from the repository root and are orchestrated by Turborepo.
 | `pnpm lint`         | Lint every package with ESLint                  |
 | `pnpm test`         | Run the Vitest suites                           |
 | `pnpm verify`       | Everything above, in dependency order           |
+| `pnpm clean`        | Remove build output from every package          |
 | `pnpm format`       | Format the repository with Prettier             |
 | `pnpm format:check` | Verify formatting without writing               |
 
@@ -79,6 +80,7 @@ code actually uses.
 ## Documentation
 
 - [`SPECIFICATION.md`](./SPECIFICATION.md) — product and engineering specification
+- [`AGENTS.md`](./AGENTS.md) — workspace map, dependency rules and invariants
 - [`docs/architecture.md`](./docs/architecture.md) — system architecture
 - [`docs/api.md`](./docs/api.md) — REST API reference
 - [`docs/websocket-events.md`](./docs/websocket-events.md) — realtime event contracts

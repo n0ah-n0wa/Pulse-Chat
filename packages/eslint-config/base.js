@@ -54,6 +54,28 @@ export function createBaseConfig({ tsconfigRootDir, ignores = [] }) {
         ],
         eqeqeq: ['error', 'always', { null: 'ignore' }],
         'no-console': 'warn',
+
+        // Workspace boundaries. pnpm already prevents importing a package that
+        // is not declared as a dependency, but nothing stops a relative path
+        // from reaching across package roots, which would bypass the build
+        // graph and the package's public entry point.
+        'no-restricted-imports': [
+          'error',
+          {
+            patterns: [
+              {
+                group: ['**/apps/**', '**/packages/**'],
+                message:
+                  'Do not import workspace code by path. Depend on the package and import it by name (for example @pulse-chat/shared).',
+              },
+              {
+                group: ['@pulse-chat/*/src/**', '@pulse-chat/*/dist/**'],
+                message:
+                  'Import a workspace package through its public entry point, not through its internals.',
+              },
+            ],
+          },
+        ],
       },
     },
     // Prettier owns formatting; disable rules that would fight it.

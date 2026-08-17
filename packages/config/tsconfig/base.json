@@ -13,7 +13,17 @@
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "noPropertyAccessFromIndexSignature": true,
+    "noUncheckedSideEffectImports": true,
+    "allowUnreachableCode": false,
+    "allowUnusedLabels": false,
 
+    // Deliberately not enabled: "exactOptionalPropertyTypes". The domain model
+    // in SPECIFICATION.md is full of optional fields that persistence and DTO
+    // layers legitimately set to undefined, and third-party types (Mongoose,
+    // Nest, React) are not written for it. Revisit only with a plan for those.
+    //
+    // "skipLibCheck" trades type checking of third-party .d.ts files for build
+    // speed; our own code is still fully checked.
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,
     "isolatedModules": true,

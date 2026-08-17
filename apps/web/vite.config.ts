@@ -9,7 +9,10 @@ export default defineConfig({
   },
   build: {
     outDir: 'dist',
-    sourcemap: true,
+    // Production source maps would ship the entire frontend source through
+    // Nginx. Turn this on again (preferably as 'hidden') once an error tracker
+    // consumes the maps instead of the browser.
+    sourcemap: false,
   },
   test: {
     environment: 'jsdom',

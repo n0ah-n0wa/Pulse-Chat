@@ -1,11 +1,17 @@
 {
   "$schema": "https://json.schemastore.org/tsconfig",
-  "display": "Pulse Chat library (Node, ESM source of truth)",
+  "display": "Pulse Chat library (platform-neutral ESM)",
   "extends": "./base.json",
   "compilerOptions": {
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
-    "types": ["node"],
+
+    // Libraries are consumed by both the browser bundle and the Node backend,
+    // so neither DOM nor Node globals are in scope. An empty "types" list keeps
+    // ambient @types packages out of the program: code that needs Buffer,
+    // process or window does not belong in a shared library.
+    "types": [],
+
     "declaration": true,
     "declarationMap": true
   }

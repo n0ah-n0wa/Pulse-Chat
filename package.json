@@ -16,6 +16,7 @@
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",
     "verify": "turbo run lint typecheck test build",
+    "clean": "turbo run clean",
     "format": "prettier --write .",
     "format:check": "prettier --check ."
   },

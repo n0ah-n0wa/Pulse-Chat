@@ -3,5 +3,8 @@
   "compilerOptions": {
     "noEmit": true
   },
-  "include": ["src", "vitest.config.ts"]
+  // Only src. Tooling configuration is deliberately kept out of this program:
+  // build tools reference @types/node, which would put Node globals back in
+  // scope and defeat the platform neutrality this package depends on.
+  "include": ["src"]
 }

@@ -1,3 +1,3 @@
-import { createBaseConfig } from '@pulse-chat/eslint-config/base';
+import { createLibraryConfig } from '@pulse-chat/eslint-config/library';
 
-export default createBaseConfig({ tsconfigRootDir: import.meta.dirname });
+export default createLibraryConfig({ tsconfigRootDir: import.meta.dirname });

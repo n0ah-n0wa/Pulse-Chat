@@ -7,16 +7,18 @@
   "type": "module",
   "exports": {
     "./base": "./base.js",
+    "./library": "./library.js",
     "./nest": "./nest.js",
     "./react": "./react.js"
   },
   "files": [
     "base.js",
+    "library.js",
     "nest.js",
     "react.js"
   ],
   "scripts": {
-    "lint": "eslint ."
+    "lint": "eslint . --max-warnings 0"
   },
   "dependencies": {
     "@eslint/js": "^10.0.1",
