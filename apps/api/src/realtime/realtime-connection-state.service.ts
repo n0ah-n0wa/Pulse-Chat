@@ -20,8 +20,7 @@ export class RealtimeConnectionStateService {
   }
 
   addRoomSubscription(socketId: string, roomId: string): void {
-    const subscriptions =
-      this.roomSubscriptionsBySocket.get(socketId) ?? new Set<string>();
+    const subscriptions = this.roomSubscriptionsBySocket.get(socketId) ?? new Set<string>();
     subscriptions.add(roomId);
     this.roomSubscriptionsBySocket.set(socketId, subscriptions);
   }
@@ -35,7 +34,8 @@ export class RealtimeConnectionStateService {
   }
 
   countConnectionsForUser(userId: string): number {
-    return [...this.connections.values()].filter((connection) => connection.userId === userId).length;
+    return [...this.connections.values()].filter((connection) => connection.userId === userId)
+      .length;
   }
 
   hasConnection(socketId: string): boolean {

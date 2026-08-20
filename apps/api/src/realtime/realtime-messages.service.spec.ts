@@ -78,13 +78,15 @@ describe('RealtimeMessagesService', () => {
 
   it('propagates membership failures without broadcasting', async () => {
     const socket = createSocket();
-    const createMessage = vi.fn<MessagesService['createMessage']>().mockRejectedValue(
-      new ApiException(
-        ROOM_ERROR_CODES.NOT_A_MEMBER,
-        'You are not a member of this room.',
-        HttpStatus.FORBIDDEN,
-      ),
-    );
+    const createMessage = vi
+      .fn<MessagesService['createMessage']>()
+      .mockRejectedValue(
+        new ApiException(
+          ROOM_ERROR_CODES.NOT_A_MEMBER,
+          'You are not a member of this room.',
+          HttpStatus.FORBIDDEN,
+        ),
+      );
     const broadcastNew = vi.fn<RealtimeMessageBroadcastService['broadcastNew']>();
     const service = new RealtimeMessagesService(
       { createMessage } as unknown as MessagesService,

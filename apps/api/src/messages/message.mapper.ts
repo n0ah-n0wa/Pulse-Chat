@@ -63,7 +63,9 @@ export function toMessageResponse(
     ...(message.replyToMessageId !== undefined
       ? { replyToMessageId: message.replyToMessageId }
       : {}),
-    ...(options.replyTo !== undefined ? { replyTo: toReplyReferenceResponse(options.replyTo) } : {}),
+    ...(options.replyTo !== undefined
+      ? { replyTo: toReplyReferenceResponse(options.replyTo) }
+      : {}),
     attachments: hideContent ? [] : [...(options.attachments ?? [])],
     reactions: (options.reactions ?? []).map(toReactionResponse),
     ...(message.editedAt !== undefined ? { editedAt: message.editedAt.toISOString() } : {}),

@@ -5,10 +5,7 @@ import { NestStructuredLoggerService } from '../../infrastructure/logging/nest-s
 import type { RedisClient } from '../../infrastructure/redis/redis-client.interface.js';
 import type { RedisSubscriber } from '../../infrastructure/redis/redis-subscriber.interface.js';
 import { REDIS_CLIENT } from '../../infrastructure/tokens.js';
-import {
-  ALL_REALTIME_BUS_CHANNELS,
-  channelForDistributedEvent,
-} from './realtime-bus.channels.js';
+import { ALL_REALTIME_BUS_CHANNELS, channelForDistributedEvent } from './realtime-bus.channels.js';
 import {
   deserializeRealtimeBusEnvelope,
   serializeRealtimeBusEnvelope,
@@ -44,7 +41,7 @@ export class RedisRealtimeEventBus
     if (this.handler !== undefined) {
       this.logger.warn(
         'onEvent() called more than once — previous handler replaced. ' +
-        'Only one subscriber is supported per RedisRealtimeEventBus instance.',
+          'Only one subscriber is supported per RedisRealtimeEventBus instance.',
         RedisRealtimeEventBus.name,
       );
     }
@@ -101,7 +98,10 @@ export class RedisRealtimeEventBus
 
     try {
       await this.subscriber.subscribe(this.subscribedChannels);
-      this.logger.log('Realtime event bus resubscribed after reconnect', RedisRealtimeEventBus.name);
+      this.logger.log(
+        'Realtime event bus resubscribed after reconnect',
+        RedisRealtimeEventBus.name,
+      );
     } catch (error) {
       this.logger.error(
         'Failed to resubscribe realtime event bus',

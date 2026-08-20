@@ -71,13 +71,15 @@ describe('RealtimeRoomSubscriptionsService', () => {
 
   it('rejects unauthorized room joins before subscribing', async () => {
     const { socket, join } = createMockSocket();
-    const requireMember = vi.fn().mockRejectedValue(
-      new ApiException(
-        ROOM_ERROR_CODES.NOT_A_MEMBER,
-        'You are not a member of this room.',
-        HttpStatus.FORBIDDEN,
-      ),
-    );
+    const requireMember = vi
+      .fn()
+      .mockRejectedValue(
+        new ApiException(
+          ROOM_ERROR_CODES.NOT_A_MEMBER,
+          'You are not a member of this room.',
+          HttpStatus.FORBIDDEN,
+        ),
+      );
     const getRoom = vi.fn();
     const roomsService = { requireMember, getRoom } as unknown as RoomsService;
     const connections = new RealtimeConnectionStateService();

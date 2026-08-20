@@ -5,11 +5,7 @@ import type { Server } from 'node:http';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import request from 'supertest';
 
-import {
-  API_ERROR_CODES,
-  AUTH_ERROR_CODES,
-  PASSWORD_MIN_LENGTH,
-} from '@pulse-chat/shared';
+import { API_ERROR_CODES, AUTH_ERROR_CODES, PASSWORD_MIN_LENGTH } from '@pulse-chat/shared';
 
 import { AppModule } from '../app.module.js';
 import { configureApplication } from '../bootstrap/configure-application.js';

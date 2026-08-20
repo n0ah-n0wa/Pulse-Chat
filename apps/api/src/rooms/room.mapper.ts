@@ -8,10 +8,7 @@ function toIsoString(value: Date | undefined): string | undefined {
 }
 
 /** Maps a persisted room to the public API shape. */
-export function toRoomResponse(
-  room: RoomRecord,
-  currentUserRole?: MembershipRole,
-): RoomResponse {
+export function toRoomResponse(room: RoomRecord, currentUserRole?: MembershipRole): RoomResponse {
   return {
     id: room.id,
     ...(room.name !== undefined && room.name.length > 0 ? { name: room.name } : {}),

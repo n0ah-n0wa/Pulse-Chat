@@ -69,7 +69,11 @@ describe('Realtime across NestJS instances', () => {
   it('delivers message:new and replies across instances via Redis Pub/Sub', async () => {
     const userA = await registerTestUser(instance1.httpServer, { username: 'multi_a' });
     const userB = await registerTestUser(instance2.httpServer, { username: 'multi_b' });
-    const roomId = await createPublicRoom(instance1.httpServer, userA.accessToken, 'Cross Instance Room');
+    const roomId = await createPublicRoom(
+      instance1.httpServer,
+      userA.accessToken,
+      'Cross Instance Room',
+    );
 
     await request(instance2.httpServer)
       .post(`/api/rooms/${roomId}/join`)

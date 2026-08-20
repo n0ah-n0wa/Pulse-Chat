@@ -2,7 +2,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { UsersService } from '../users/users.service.js';
 import { createPresenceOptions, PresenceService } from './presence.service.js';
-import type { PresenceNotifier, PresenceStore, UserPresenceSnapshot } from './presence.store.interface.js';
+import type {
+  PresenceNotifier,
+  PresenceStore,
+  UserPresenceSnapshot,
+} from './presence.store.interface.js';
 
 const USER_ID = '507f1f77bcf86cd799439011';
 const SOCKET_A = 'socket-a';

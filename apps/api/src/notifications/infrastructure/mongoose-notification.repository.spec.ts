@@ -50,7 +50,9 @@ describe('MongooseNotificationRepository', () => {
   it('creates the expected indexes', async () => {
     const indexes = await model.collection.indexes();
     const keyStrings = indexes.map((index) => JSON.stringify(index.key));
-    expect(keyStrings).toContain(JSON.stringify({ userId: 1, type: 1, referenceId: 1, actorId: 1 }));
+    expect(keyStrings).toContain(
+      JSON.stringify({ userId: 1, type: 1, referenceId: 1, actorId: 1 }),
+    );
     expect(keyStrings).toContain(JSON.stringify({ userId: 1, createdAt: -1, _id: -1 }));
   });
 
@@ -126,7 +128,7 @@ describe('MongooseNotificationRepository', () => {
     expect(page2).toHaveLength(1);
   });
 
-  it('markRead updates only the owner\'s notification', async () => {
+  it("markRead updates only the owner's notification", async () => {
     const { record } = await repository.findOrCreate({
       userId: USER_A,
       type: NOTIFICATION_TYPES.MENTION,

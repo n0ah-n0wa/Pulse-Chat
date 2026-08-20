@@ -25,7 +25,11 @@ import type { UserRepository } from '../users/user.repository.interface.js';
 import { USER_REPOSITORY } from '../users/users.tokens.js';
 import { MentionResolverService } from './mention-resolver.service.js';
 import { canDeleteMessage, canEditMessage } from './message-permissions.js';
-import { toMessageListResponse, toMessageResponse, toMessageSearchListResponse } from './message.mapper.js';
+import {
+  toMessageListResponse,
+  toMessageResponse,
+  toMessageSearchListResponse,
+} from './message.mapper.js';
 import { AttachmentsService } from '../attachments/attachments.service.js';
 import type {
   MessageReactionRepository,
@@ -273,7 +277,9 @@ export class MessagesService {
   ): Promise<MessageResponse> {
     const reactionMap = await this.reactions.summarizeByMessageIds([message.id], currentUserId);
     const replyMap = await this.loadReplyMap([message]);
-    const attachments = await this.attachmentsService.hydrateAttachmentResponses(message.attachments);
+    const attachments = await this.attachmentsService.hydrateAttachmentResponses(
+      message.attachments,
+    );
 
     return toMessageResponse(message, {
       reactions: reactionMap.get(message.id),
@@ -287,10 +293,13 @@ export class MessagesService {
     messages: readonly MessageRecord[],
   ): Promise<Map<string, AttachmentResponse[]>> {
     const entries = await Promise.all(
-      messages.map(async (message) => [
-        message.id,
-        await this.attachmentsService.hydrateAttachmentResponses(message.attachments),
-      ] as const),
+      messages.map(
+        async (message) =>
+          [
+            message.id,
+            await this.attachmentsService.hydrateAttachmentResponses(message.attachments),
+          ] as const,
+      ),
     );
 
     return new Map(entries);
@@ -299,7 +308,13 @@ export class MessagesService {
   private async loadReplyMap(
     messages: readonly MessageRecord[],
   ): Promise<Map<string, MessageReplyReferenceRecord>> {
-    const replyIds = [...new Set(messages.flatMap((message) => (message.replyToMessageId === undefined ? [] : [message.replyToMessageId])))];
+    const replyIds = [
+      ...new Set(
+        messages.flatMap((message) =>
+          message.replyToMessageId === undefined ? [] : [message.replyToMessageId],
+        ),
+      ),
+    ];
     const replyMessages = await this.messages.findByIds(replyIds);
 
     return new Map<string, MessageReplyReferenceRecord>(

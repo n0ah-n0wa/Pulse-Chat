@@ -93,8 +93,16 @@ describe('MessagesService', () => {
   const linkAttachmentsToMessage = vi.fn<AttachmentsService['linkAttachmentsToMessage']>();
   const hydrateAttachmentResponses = vi.fn<AttachmentsService['hydrateAttachmentResponses']>();
 
-  const roomsService = { requireMember, getRoomRecord, getDirectRoomPeer } as unknown as RoomsService;
-  const notificationsService = { notifyMention, notifyReply, notifyDirectMessage } as unknown as NotificationsService;
+  const roomsService = {
+    requireMember,
+    getRoomRecord,
+    getDirectRoomPeer,
+  } as unknown as RoomsService;
+  const notificationsService = {
+    notifyMention,
+    notifyReply,
+    notifyDirectMessage,
+  } as unknown as NotificationsService;
   const mentionResolver = { resolveMentionedUserIds } as unknown as MentionResolverService;
   const users = { findByIds: findUsersByIds } as unknown as UserRepository;
   const attachmentsService = {
@@ -115,7 +123,12 @@ describe('MessagesService', () => {
   beforeEach(() => {
     vi.resetAllMocks();
     requireMember.mockResolvedValue(membership());
-    getRoomRecord.mockResolvedValue({ id: ROOM_ID, type: 'public', createdAt: new Date(), updatedAt: new Date() } as unknown as import('../rooms/room.repository.interface.js').RoomRecord);
+    getRoomRecord.mockResolvedValue({
+      id: ROOM_ID,
+      type: 'public',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    } as unknown as import('../rooms/room.repository.interface.js').RoomRecord);
     getDirectRoomPeer.mockResolvedValue(undefined);
     notifyMention.mockResolvedValue(undefined);
     notifyReply.mockResolvedValue(undefined);
@@ -248,7 +261,7 @@ describe('MessagesService', () => {
     expect(findPage).not.toHaveBeenCalled();
   });
 
-  it('does not reuse another author\'s clientMessageId', async () => {
+  it("does not reuse another author's clientMessageId", async () => {
     findByClientMessageId.mockResolvedValue(null);
     create.mockResolvedValue(message({ authorId: OTHER_USER_ID, clientMessageId: 'shared-id' }));
 
@@ -314,9 +327,7 @@ describe('MessagesService', () => {
     const existing = message();
     const editedAt = new Date('2026-08-18T02:00:00.000Z');
     findById.mockResolvedValue(existing);
-    updateContent.mockResolvedValue(
-      message({ content: 'Updated', editedAt, updatedAt: editedAt }),
-    );
+    updateContent.mockResolvedValue(message({ content: 'Updated', editedAt, updatedAt: editedAt }));
 
     const result = await service.updateMessage(USER_ID, MESSAGE_ID, { content: 'Updated' });
 
@@ -325,9 +336,11 @@ describe('MessagesService', () => {
     expect(result.editedAt).toBe(editedAt.toISOString());
   });
 
-  it('lets a moderator edit another member\'s message', async () => {
+  it("lets a moderator edit another member's message", async () => {
     findById.mockResolvedValue(message({ authorId: USER_ID }));
-    requireMember.mockResolvedValue(membership({ userId: OTHER_USER_ID, role: MEMBERSHIP_ROLES.MODERATOR }));
+    requireMember.mockResolvedValue(
+      membership({ userId: OTHER_USER_ID, role: MEMBERSHIP_ROLES.MODERATOR }),
+    );
     updateContent.mockResolvedValue(message({ content: 'Moderated', authorId: USER_ID }));
 
     await service.updateMessage(OTHER_USER_ID, MESSAGE_ID, { content: 'Moderated' });
@@ -335,9 +348,11 @@ describe('MessagesService', () => {
     expect(updateContent).toHaveBeenCalled();
   });
 
-  it('forbids a member from editing someone else\'s message', async () => {
+  it("forbids a member from editing someone else's message", async () => {
     findById.mockResolvedValue(message({ authorId: USER_ID }));
-    requireMember.mockResolvedValue(membership({ userId: OTHER_USER_ID, role: MEMBERSHIP_ROLES.MEMBER }));
+    requireMember.mockResolvedValue(
+      membership({ userId: OTHER_USER_ID, role: MEMBERSHIP_ROLES.MEMBER }),
+    );
 
     await expect(
       service.updateMessage(OTHER_USER_ID, MESSAGE_ID, { content: 'Nope' }),
@@ -369,9 +384,11 @@ describe('MessagesService', () => {
     expect(softDelete).toHaveBeenCalledWith(MESSAGE_ID, expect.any(Date));
   });
 
-  it('lets a moderator delete another member\'s message', async () => {
+  it("lets a moderator delete another member's message", async () => {
     findById.mockResolvedValue(message({ authorId: USER_ID }));
-    requireMember.mockResolvedValue(membership({ userId: OTHER_USER_ID, role: MEMBERSHIP_ROLES.MODERATOR }));
+    requireMember.mockResolvedValue(
+      membership({ userId: OTHER_USER_ID, role: MEMBERSHIP_ROLES.MODERATOR }),
+    );
     softDelete.mockResolvedValue(message({ deletedAt: new Date() }));
 
     const deleted = await service.deleteMessage(OTHER_USER_ID, MESSAGE_ID);
@@ -380,7 +397,7 @@ describe('MessagesService', () => {
     expect(softDelete).toHaveBeenCalled();
   });
 
-  it('forbids a member from deleting someone else\'s message', async () => {
+  it("forbids a member from deleting someone else's message", async () => {
     findById.mockResolvedValue(message({ authorId: USER_ID }));
     requireMember.mockResolvedValue(membership({ userId: OTHER_USER_ID }));
 
@@ -426,13 +443,19 @@ describe('MessagesService', () => {
       createdAt: new Date(),
     });
     summarizeReactions
-      .mockResolvedValueOnce(new Map([[MESSAGE_ID, [{ emoji: '👍', count: 1, reactedByCurrentUser: true }]]]))
+      .mockResolvedValueOnce(
+        new Map([[MESSAGE_ID, [{ emoji: '👍', count: 1, reactedByCurrentUser: true }]]]),
+      )
       .mockResolvedValueOnce(new Map());
 
     const added = await service.toggleReaction(USER_ID, MESSAGE_ID, { emoji: '👍' });
     const removed = await service.toggleReaction(USER_ID, MESSAGE_ID, { emoji: '👍' });
 
-    expect(createReaction).toHaveBeenCalledWith({ messageId: MESSAGE_ID, userId: USER_ID, emoji: '👍' });
+    expect(createReaction).toHaveBeenCalledWith({
+      messageId: MESSAGE_ID,
+      userId: USER_ID,
+      emoji: '👍',
+    });
     expect(deleteReaction).toHaveBeenCalledWith(MESSAGE_ID, USER_ID, '👍');
     expect(added.reactions).toEqual([{ emoji: '👍', count: 1, reactedByCurrentUser: true }]);
     expect(removed.reactions).toEqual([]);
@@ -464,7 +487,9 @@ describe('MessagesService', () => {
   it('forbids reacting to a deleted message', async () => {
     findById.mockResolvedValue(message({ deletedAt: new Date('2026-08-18T03:00:00.000Z') }));
 
-    await expect(service.toggleReaction(USER_ID, MESSAGE_ID, { emoji: '👍' })).rejects.toMatchObject({
+    await expect(
+      service.toggleReaction(USER_ID, MESSAGE_ID, { emoji: '👍' }),
+    ).rejects.toMatchObject({
       code: MESSAGE_ERROR_CODES.MESSAGE_ALREADY_DELETED,
     });
   });

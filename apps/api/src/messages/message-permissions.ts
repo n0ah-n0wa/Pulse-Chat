@@ -1,4 +1,8 @@
-import { MEMBERSHIP_ROLES, hasAtLeastMembershipRole, type MembershipRole } from '@pulse-chat/shared';
+import {
+  MEMBERSHIP_ROLES,
+  hasAtLeastMembershipRole,
+  type MembershipRole,
+} from '@pulse-chat/shared';
 
 /** Minimum membership facts needed to decide message edit/delete rights. */
 export interface MessageActorMembership {

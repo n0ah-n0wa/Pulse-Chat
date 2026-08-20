@@ -7,8 +7,8 @@ export function HomePage() {
     <section className="w-full rounded-xl border border-slate-200 bg-white p-8 shadow-sm">
       <h1 className="text-2xl font-semibold tracking-tight">{APP_NAME}</h1>
       <p className="mt-3 max-w-2xl text-sm leading-relaxed text-slate-600">
-        The frontend foundation is ready: routing, API client, TanStack Query, Zustand auth
-        state, and the Socket.IO service are wired up. Feature UI arrives in later phases.
+        The frontend foundation is ready: routing, API client, TanStack Query, Zustand auth state,
+        and the Socket.IO service are wired up. Feature UI arrives in later phases.
       </p>
       <div className="mt-6 flex flex-wrap gap-3">
         <Link
@@ -22,6 +22,12 @@ export function HomePage() {
           className="rounded-md border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700"
         >
           Sign in
+        </Link>
+        <Link
+          to="/register"
+          className="rounded-md border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700"
+        >
+          Create account
         </Link>
       </div>
     </section>

@@ -25,7 +25,11 @@ import { AppModule } from '../app.module.js';
 import { configureApplication } from '../bootstrap/configure-application.js';
 import { AppConfigService } from '../config/index.js';
 import { RedisService } from '../infrastructure/redis/redis.service.js';
-import { bearerAuthorization, registerTestUser, signExpiredAccessToken } from '../test/auth-test.helpers.js';
+import {
+  bearerAuthorization,
+  registerTestUser,
+  signExpiredAccessToken,
+} from '../test/auth-test.helpers.js';
 import { startMongoMemoryServer, stopMongoMemoryServer } from '../test/mongo-memory.js';
 import { TestRedisService } from '../test/test-redis.service.js';
 import { RealtimeConnectionStateService } from './realtime-connection-state.service.js';
@@ -397,7 +401,9 @@ function onceRoomLeftEvent(
   });
 }
 
-function waitForDisconnect(socket: Socket<ServerToClientEvents, ClientToServerEvents>): Promise<void> {
+function waitForDisconnect(
+  socket: Socket<ServerToClientEvents, ClientToServerEvents>,
+): Promise<void> {
   if (!socket.connected) {
     return Promise.resolve();
   }

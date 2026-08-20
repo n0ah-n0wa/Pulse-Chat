@@ -66,12 +66,7 @@ export class RedisPresenceStore implements PresenceStore {
     }
 
     const existing = await this.readStoredPresence(userId);
-    await this.writeUserPresence(
-      userId,
-      lastSeenAt,
-      ttlSeconds,
-      existing?.instanceId ?? 'unknown',
-    );
+    await this.writeUserPresence(userId, lastSeenAt, ttlSeconds, existing?.instanceId ?? 'unknown');
 
     return { connectionCount: socketIds.length, lastSeenAt };
   }
@@ -118,11 +113,7 @@ export class RedisPresenceStore implements PresenceStore {
   async clearUser(userId: string): Promise<void> {
     const socketIds = await this.redis.smembers(presenceUserSessionsKey(userId));
     const sessionKeys = socketIds.map((socketId) => presenceSessionKey(socketId));
-    await this.redis.del(
-      presenceUserKey(userId),
-      presenceUserSessionsKey(userId),
-      ...sessionKeys,
-    );
+    await this.redis.del(presenceUserKey(userId), presenceUserSessionsKey(userId), ...sessionKeys);
   }
 
   private async writeUserPresence(

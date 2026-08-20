@@ -1,6 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { MEMBERSHIP_ROLES, ROOM_ERROR_CODES, ROOM_TYPES, USER_ERROR_CODES } from '@pulse-chat/shared';
+import {
+  MEMBERSHIP_ROLES,
+  ROOM_ERROR_CODES,
+  ROOM_TYPES,
+  USER_ERROR_CODES,
+} from '@pulse-chat/shared';
 
 import type { UserRepository } from '../users/user.repository.interface.js';
 import type { RoomMemberRecord, RoomMemberRepository } from './room-member.repository.interface.js';
@@ -117,9 +122,7 @@ describe('RoomsService', () => {
 
     const listed = await service.listRooms(MEMBER_ID);
 
-    expect(listed.map((item) => item.id).sort()).toEqual(
-      [ROOM_ID, privateRoom.id].sort(),
-    );
+    expect(listed.map((item) => item.id).sort()).toEqual([ROOM_ID, privateRoom.id].sort());
   });
 
   it('creates a public room with the creator as owner', async () => {
@@ -240,11 +243,11 @@ describe('RoomsService', () => {
       member({ userId: OWNER_ID, role: MEMBERSHIP_ROLES.MEMBER }),
     );
 
-    await expect(
-      service.addMember(OWNER_ID, ROOM_ID, { userId: MEMBER_ID }),
-    ).rejects.toMatchObject({
-      code: ROOM_ERROR_CODES.INSUFFICIENT_ROOM_ROLE,
-    });
+    await expect(service.addMember(OWNER_ID, ROOM_ID, { userId: MEMBER_ID })).rejects.toMatchObject(
+      {
+        code: ROOM_ERROR_CODES.INSUFFICIENT_ROOM_ROLE,
+      },
+    );
   });
 
   it('rejects a member promoting or removing other members', async () => {
@@ -253,9 +256,7 @@ describe('RoomsService', () => {
       member({ userId: MEMBER_ID, role: MEMBERSHIP_ROLES.MEMBER }),
     );
 
-    await expect(
-      service.addMember(MEMBER_ID, ROOM_ID, { userId: PEER_ID }),
-    ).rejects.toMatchObject({
+    await expect(service.addMember(MEMBER_ID, ROOM_ID, { userId: PEER_ID })).rejects.toMatchObject({
       code: ROOM_ERROR_CODES.INSUFFICIENT_ROOM_ROLE,
     });
 

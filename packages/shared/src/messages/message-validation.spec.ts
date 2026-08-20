@@ -38,9 +38,9 @@ describe('createMessageSchema', () => {
   });
 
   it('rejects empty and whitespace-only content', () => {
-    expect(() =>
-      createMessageSchema.parse({ content: '', clientMessageId: 'client-1' }),
-    ).toThrow(/empty/);
+    expect(() => createMessageSchema.parse({ content: '', clientMessageId: 'client-1' })).toThrow(
+      /empty/,
+    );
     expect(() =>
       createMessageSchema.parse({ content: '   \n\t  ', clientMessageId: 'client-1' }),
     ).toThrow(/empty/);

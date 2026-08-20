@@ -58,9 +58,7 @@ export class MongooseUserRepository implements UserRepository {
       return [];
     }
 
-    const documents = await this.userModel
-      .find({ username: { $in: [...usernames] } })
-      .exec();
+    const documents = await this.userModel.find({ username: { $in: [...usernames] } }).exec();
 
     return documents.map((document) => toUserRecord(document));
   }

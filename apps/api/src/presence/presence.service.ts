@@ -211,9 +211,7 @@ export class PresenceService implements OnModuleInit, OnModuleDestroy {
   }
 }
 
-export function createPresenceOptions(
-  overrides: Partial<PresenceOptions> = {},
-): PresenceOptions {
+export function createPresenceOptions(overrides: Partial<PresenceOptions> = {}): PresenceOptions {
   return {
     ttlSeconds: PRESENCE_TTL_SECONDS,
     heartbeatIntervalMs: PRESENCE_HEARTBEAT_INTERVAL_MS,

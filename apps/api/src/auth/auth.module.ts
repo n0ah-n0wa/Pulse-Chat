@@ -10,10 +10,7 @@ import { AuthRateLimitGuard } from './guards/auth-rate-limit.guard.js';
 import { AuthGuard } from './guards/auth.guard.js';
 import { mongooseRefreshTokenRepositoryProviders } from './infrastructure/mongoose-refresh-token.repository.js';
 import { RefreshTokenIndexInitializer } from './infrastructure/refresh-token-index.initializer.js';
-import {
-  RefreshTokenDocument,
-  RefreshTokenSchema,
-} from './infrastructure/refresh-token.schema.js';
+import { RefreshTokenDocument, RefreshTokenSchema } from './infrastructure/refresh-token.schema.js';
 import { TokenService } from './token.service.js';
 
 @Module({

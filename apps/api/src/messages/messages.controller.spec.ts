@@ -464,7 +464,7 @@ describe('MessagesController', () => {
     expect(listed?.content).not.toContain('Remove me');
   });
 
-  it('lets a moderator edit and delete another member\'s message', async () => {
+  it("lets a moderator edit and delete another member's message", async () => {
     const owner = await registerTestUser(httpServer, { username: 'mod_msg_own' });
     const moderator = await registerTestUser(httpServer, { username: 'mod_msg_mod' });
     const member = await registerTestUser(httpServer, { username: 'mod_msg_mem' });
@@ -520,7 +520,7 @@ describe('MessagesController', () => {
     });
   });
 
-  it('forbids a member from editing or deleting someone else\'s message', async () => {
+  it("forbids a member from editing or deleting someone else's message", async () => {
     const owner = await registerTestUser(httpServer, { username: 'unauth_own' });
     const member = await registerTestUser(httpServer, { username: 'unauth_mem' });
 
@@ -798,7 +798,7 @@ describe('MessagesController', () => {
       })
       .expect(201);
 
-    expect((reply.body as MessageResponse)).toMatchObject({
+    expect(reply.body as MessageResponse).toMatchObject({
       replyToMessageId: createdId(original.body),
       replyTo: {
         id: createdId(original.body),

@@ -33,14 +33,19 @@ export function canUpdateRoomName(membership: MembershipAccess | null): boolean 
 }
 
 export function canUpdateRoomDescription(membership: MembershipAccess | null): boolean {
-  return membership !== null && hasAtLeastMembershipRole(membership.role, MEMBERSHIP_ROLES.MODERATOR);
+  return (
+    membership !== null && hasAtLeastMembershipRole(membership.role, MEMBERSHIP_ROLES.MODERATOR)
+  );
 }
 
 export function canTransferOwnership(membership: MembershipAccess | null): boolean {
   return membership?.role === MEMBERSHIP_ROLES.OWNER;
 }
 
-export function canDeleteRoom(room: RoomAccessTarget, membership: MembershipAccess | null): boolean {
+export function canDeleteRoom(
+  room: RoomAccessTarget,
+  membership: MembershipAccess | null,
+): boolean {
   if (membership === null) {
     return false;
   }
@@ -67,10 +72,7 @@ export function canAssignModerator(membership: MembershipAccess | null): boolean
   return membership?.role === MEMBERSHIP_ROLES.OWNER;
 }
 
-export function canRemoveMember(
-  actor: MembershipAccess | null,
-  target: MembershipAccess,
-): boolean {
+export function canRemoveMember(actor: MembershipAccess | null, target: MembershipAccess): boolean {
   if (actor === null || target.role === MEMBERSHIP_ROLES.OWNER) {
     return false;
   }

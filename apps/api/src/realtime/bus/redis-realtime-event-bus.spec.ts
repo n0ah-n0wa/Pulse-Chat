@@ -133,11 +133,7 @@ async function createBus(
   redis: Pick<RedisClient, 'publish' | 'createSubscriber'>,
   logger = createLogger().logger,
 ): Promise<RedisRealtimeEventBus> {
-  const bus = new RedisRealtimeEventBus(
-    redis as RedisClient,
-    instanceId,
-    logger,
-  );
+  const bus = new RedisRealtimeEventBus(redis as RedisClient, instanceId, logger);
   await bus.onModuleInit();
   return bus;
 }
@@ -187,7 +183,7 @@ describe('RedisRealtimeEventBus', () => {
     });
   });
 
-  it('does not re-dispatch an instance\'s own events, preventing publish loops', async () => {
+  it("does not re-dispatch an instance's own events, preventing publish loops", async () => {
     await instanceA.publish({
       event: DISTRIBUTED_REALTIME_EVENTS.USER_ONLINE,
       userId: '507f1f77bcf86cd799439011',

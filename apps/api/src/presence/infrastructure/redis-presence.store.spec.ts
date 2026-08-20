@@ -2,11 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { TestRedisService } from '../../test/test-redis.service.js';
-import {
-  presenceSessionKey,
-  presenceUserKey,
-  RedisPresenceStore,
-} from './redis-presence.store.js';
+import { presenceSessionKey, presenceUserKey, RedisPresenceStore } from './redis-presence.store.js';
 
 const INSTANCE_ID = 'test-instance';
 

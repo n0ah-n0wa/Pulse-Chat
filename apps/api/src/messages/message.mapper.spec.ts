@@ -63,19 +63,21 @@ describe('toMessageResponse', () => {
       deletedAt: deletedAt.toISOString(),
     });
 
-    expect(toMessageResponse(deleted, {
-      includeDeletedContent: true,
-      attachments: [
-        {
-          id: 'file-1',
-          filename: 'file.txt',
-          mimeType: 'text/plain',
-          sizeBytes: 1,
-          url: '/api/files/file-1',
-          createdAt: '2026-08-18T00:00:00.000Z',
-        },
-      ],
-    })).toMatchObject({
+    expect(
+      toMessageResponse(deleted, {
+        includeDeletedContent: true,
+        attachments: [
+          {
+            id: 'file-1',
+            filename: 'file.txt',
+            mimeType: 'text/plain',
+            sizeBytes: 1,
+            url: '/api/files/file-1',
+            createdAt: '2026-08-18T00:00:00.000Z',
+          },
+        ],
+      }),
+    ).toMatchObject({
       content: 'secret',
       attachments: [
         {

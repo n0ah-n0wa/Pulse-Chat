@@ -32,10 +32,7 @@ export type NotificationDocumentHydrated = HydratedDocument<NotificationDocument
 export const NotificationSchema = SchemaFactory.createForClass(NotificationDocument);
 
 // Idempotent: one notification per (recipient, type, reference, actor) tuple.
-NotificationSchema.index(
-  { userId: 1, type: 1, referenceId: 1, actorId: 1 },
-  { unique: true },
-);
+NotificationSchema.index({ userId: 1, type: 1, referenceId: 1, actorId: 1 }, { unique: true });
 
 // Efficient cursor-paginated listing newest-first.
 NotificationSchema.index({ userId: 1, createdAt: -1, _id: -1 });

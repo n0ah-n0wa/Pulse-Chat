@@ -387,7 +387,7 @@ describe('Notifications API', () => {
     }
   });
 
-  it('returns 404 when trying to mark another user\'s notification as read', async () => {
+  it("returns 404 when trying to mark another user's notification as read", async () => {
     const author = await registerTestUser(httpServer, { username: 'notif_read_403_author' });
     const target = await registerTestUser(httpServer, { username: 'notif_read_403_target' });
     const outsider = await registerTestUser(httpServer, { username: 'notif_read_403_outsider' });

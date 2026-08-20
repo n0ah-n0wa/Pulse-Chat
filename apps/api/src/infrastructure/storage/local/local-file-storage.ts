@@ -80,6 +80,4 @@ function isEnoent(error: unknown): boolean {
   return typeof error === 'object' && error !== null && 'code' in error && error.code === 'ENOENT';
 }
 
-export const localFileStorageProviders = [
-  LocalFileStorage,
-] as const;
+export const localFileStorageProviders = [LocalFileStorage] as const;

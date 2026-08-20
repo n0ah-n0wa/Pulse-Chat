@@ -8,10 +8,7 @@ import type {
   RefreshTokenRepository,
 } from '../refresh-token.repository.interface.js';
 import { REFRESH_TOKEN_REPOSITORY } from '../refresh-token.repository.interface.js';
-import {
-  RefreshTokenDocument,
-  type RefreshTokenDocumentHydrated,
-} from './refresh-token.schema.js';
+import { RefreshTokenDocument, type RefreshTokenDocumentHydrated } from './refresh-token.schema.js';
 
 function objectIdToString(value: Types.ObjectId | string): string {
   return typeof value === 'string' ? value : value.toHexString();

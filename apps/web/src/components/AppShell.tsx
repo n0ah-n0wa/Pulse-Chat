@@ -5,6 +5,7 @@ import { APP_NAME } from '@pulse-chat/shared';
 import { useRealtimeConnection } from '../hooks/useRealtimeConnection';
 import { useSocketConnectionState } from '../hooks/useSocketConnectionState';
 import { useAuth } from '../hooks/useAuth';
+import { useLogout } from '../hooks/useLogout';
 import type { SocketConnectionState } from '../types';
 
 const CONNECTION_LABELS: Record<SocketConnectionState, string> = {
@@ -37,12 +38,14 @@ export function AppShell() {
   useRealtimeConnection();
 
   const { isAuthenticated, user } = useAuth();
+  const logout = useLogout();
   const connectionState = useSocketConnectionState();
+  const isSigningOut = logout.isPending;
 
   return (
     <div className="flex min-h-dvh flex-col bg-slate-50 text-slate-900">
       <header className="border-b border-slate-200 bg-white">
-        <div className="mx-auto flex w-full max-w-5xl items-center justify-between gap-4 px-6 py-4">
+        <div className="mx-auto flex w-full max-w-5xl flex-wrap items-center justify-between gap-4 px-4 py-4 sm:px-6">
           <div>
             <Link to="/" className="text-lg font-semibold tracking-tight">
               {APP_NAME}
@@ -50,27 +53,47 @@ export function AppShell() {
             <p className="text-xs text-slate-500">Application foundation</p>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
             <span
               className={`rounded-full px-3 py-1 text-xs font-medium ${connectionBadgeClass(connectionState)}`}
             >
               {CONNECTION_LABELS[connectionState]}
             </span>
             {isAuthenticated ? (
-              <span className="text-sm text-slate-600">{user?.displayName}</span>
+              <>
+                <span className="text-sm text-slate-600">{user?.displayName}</span>
+                <button
+                  type="button"
+                  disabled={isSigningOut}
+                  onClick={() => {
+                    logout.mutate();
+                  }}
+                  className="rounded-md border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {isSigningOut ? 'Signing out…' : 'Sign out'}
+                </button>
+              </>
             ) : (
-              <Link
-                to="/login"
-                className="rounded-md border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700"
-              >
-                Sign in
-              </Link>
+              <div className="flex items-center gap-2">
+                <Link
+                  to="/login"
+                  className="rounded-md border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700"
+                >
+                  Sign in
+                </Link>
+                <Link
+                  to="/register"
+                  className="rounded-md bg-slate-900 px-3 py-1.5 text-sm font-medium text-white"
+                >
+                  Register
+                </Link>
+              </div>
             )}
           </div>
         </div>
       </header>
 
-      <main className="mx-auto flex w-full max-w-5xl flex-1 px-6 py-8">
+      <main className="mx-auto flex w-full max-w-5xl flex-1 px-4 py-8 sm:px-6">
         <Outlet />
       </main>
     </div>

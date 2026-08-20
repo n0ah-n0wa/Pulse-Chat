@@ -18,7 +18,8 @@ describe('StorageModule', () => {
   beforeEach(async () => {
     tempDir = await mkdtemp(path.join(os.tmpdir(), 'pulse-storage-module-'));
     process.env['NODE_ENV'] = 'test';
-    process.env['MONGODB_URI'] = process.env['MONGODB_URI'] ?? 'mongodb://localhost:27017/pulse_chat_test';
+    process.env['MONGODB_URI'] =
+      process.env['MONGODB_URI'] ?? 'mongodb://localhost:27017/pulse_chat_test';
     process.env['REDIS_URL'] = process.env['REDIS_URL'] ?? 'redis://localhost:6379/1';
     process.env['CORS_ORIGIN'] = process.env['CORS_ORIGIN'] ?? 'http://localhost:5173';
     process.env['FILE_STORAGE_PROVIDER'] = 'local';

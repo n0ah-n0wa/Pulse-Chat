@@ -21,7 +21,10 @@ export function buildSearchMatchingContext(
   }
 
   const start = Math.max(0, matchIndex - DEFAULT_SNIPPET_RADIUS);
-  const end = Math.min(content.length, matchIndex + normalizedQuery.length + DEFAULT_SNIPPET_RADIUS);
+  const end = Math.min(
+    content.length,
+    matchIndex + normalizedQuery.length + DEFAULT_SNIPPET_RADIUS,
+  );
   let snippet = content.slice(start, end);
 
   if (start > 0) {

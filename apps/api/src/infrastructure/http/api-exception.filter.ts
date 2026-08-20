@@ -10,7 +10,13 @@ import type { ArgumentsHost } from '@nestjs/common';
 import type { Response } from 'express';
 import { ZodError } from 'zod';
 
-import { API_ERROR_CODES, ATTACHMENT_ERROR_CODES, ATTACHMENT_MAX_BYTES, type ApiErrorBody, type ApiErrorCode } from '@pulse-chat/shared';
+import {
+  API_ERROR_CODES,
+  ATTACHMENT_ERROR_CODES,
+  ATTACHMENT_MAX_BYTES,
+  type ApiErrorBody,
+  type ApiErrorCode,
+} from '@pulse-chat/shared';
 
 import { ApiException } from '../../common/errors/api.exception.js';
 import { formatZodValidationMessage } from '../../common/validation/format-zod-validation-message.js';

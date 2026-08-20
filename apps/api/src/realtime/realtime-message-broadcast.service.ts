@@ -14,15 +14,9 @@ import {
 
 import { NestStructuredLoggerService } from '../infrastructure/logging/nest-structured-logger.service.js';
 import type { PresenceNotifier } from '../presence/presence.store.interface.js';
-import {
-  DISTRIBUTED_REALTIME_EVENTS,
-  userSocketRoom,
-} from './bus/realtime-bus.channels.js';
+import { DISTRIBUTED_REALTIME_EVENTS, userSocketRoom } from './bus/realtime-bus.channels.js';
 import type { RealtimeBusEnvelope } from './bus/realtime-bus.envelope.js';
-import {
-  REALTIME_EVENT_PUBLISHER,
-  REALTIME_EVENT_SUBSCRIBER,
-} from './bus/realtime-bus.tokens.js';
+import { REALTIME_EVENT_PUBLISHER, REALTIME_EVENT_SUBSCRIBER } from './bus/realtime-bus.tokens.js';
 import type { RealtimeEventPublisher } from './bus/realtime-event-publisher.interface.js';
 import type { RealtimeEventSubscriber } from './bus/realtime-event-subscriber.interface.js';
 import type { Server } from 'socket.io';
@@ -114,10 +108,9 @@ export class RealtimeMessageBroadcastService implements PresenceNotifier {
   }
 
   broadcastNotification(event: NotificationNewEvent): Promise<void> {
-    this.server?.to(userSocketRoom(event.notification.userId)).emit(
-      SERVER_SOCKET_EVENTS.NOTIFICATION_NEW,
-      event,
-    );
+    this.server
+      ?.to(userSocketRoom(event.notification.userId))
+      .emit(SERVER_SOCKET_EVENTS.NOTIFICATION_NEW, event);
     return this.publish({
       event: DISTRIBUTED_REALTIME_EVENTS.NOTIFICATION_NEW,
       userId: event.notification.userId,
@@ -131,28 +124,16 @@ export class RealtimeMessageBroadcastService implements PresenceNotifier {
         this.emitToRoom(envelope.roomId, SERVER_SOCKET_EVENTS.MESSAGE_NEW, envelope.payload);
         return;
       case DISTRIBUTED_REALTIME_EVENTS.MESSAGE_UPDATED:
-        this.emitToRoom(
-          envelope.roomId,
-          SERVER_SOCKET_EVENTS.MESSAGE_UPDATED,
-          envelope.payload,
-        );
+        this.emitToRoom(envelope.roomId, SERVER_SOCKET_EVENTS.MESSAGE_UPDATED, envelope.payload);
         return;
       case DISTRIBUTED_REALTIME_EVENTS.MESSAGE_DELETED:
-        this.emitToRoom(
-          envelope.roomId,
-          SERVER_SOCKET_EVENTS.MESSAGE_DELETED,
-          envelope.payload,
-        );
+        this.emitToRoom(envelope.roomId, SERVER_SOCKET_EVENTS.MESSAGE_DELETED, envelope.payload);
         return;
       case DISTRIBUTED_REALTIME_EVENTS.REACTION_ADDED:
         this.emitToRoom(envelope.roomId, SERVER_SOCKET_EVENTS.REACTION_ADDED, envelope.payload);
         return;
       case DISTRIBUTED_REALTIME_EVENTS.REACTION_REMOVED:
-        this.emitToRoom(
-          envelope.roomId,
-          SERVER_SOCKET_EVENTS.REACTION_REMOVED,
-          envelope.payload,
-        );
+        this.emitToRoom(envelope.roomId, SERVER_SOCKET_EVENTS.REACTION_REMOVED, envelope.payload);
         return;
       case DISTRIBUTED_REALTIME_EVENTS.USER_ONLINE:
         this.emitToAll(SERVER_SOCKET_EVENTS.USER_ONLINE, envelope.payload);

@@ -2,10 +2,7 @@ import path from 'node:path';
 
 import { HttpStatus } from '@nestjs/common';
 
-import {
-  ATTACHMENT_FILENAME_MAX_LENGTH,
-  ATTACHMENT_ERROR_CODES,
-} from '@pulse-chat/shared';
+import { ATTACHMENT_FILENAME_MAX_LENGTH, ATTACHMENT_ERROR_CODES } from '@pulse-chat/shared';
 
 import { ApiException } from '../../../common/errors/api.exception.js';
 

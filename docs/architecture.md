@@ -52,10 +52,10 @@ URL.
 
 ## Repository layout
 
-| Package | Role |
-| --- | --- |
-| `@pulse-chat/api` | NestJS REST, Socket.IO, persistence, Redis |
-| `@pulse-chat/web` | React UI (Vite) |
+| Package              | Role                                            |
+| -------------------- | ----------------------------------------------- |
+| `@pulse-chat/api`    | NestJS REST, Socket.IO, persistence, Redis      |
+| `@pulse-chat/web`    | React UI (Vite)                                 |
 | `@pulse-chat/shared` | Types, Zod schemas, constants used by both apps |
 
 Apps import `@pulse-chat/shared` by package name only. They never import each
@@ -205,24 +205,24 @@ same bus when that feature lands. They are not persisted.
 The web app is still a shell. When client state is implemented (specification
 section 36):
 
-| Store | Owns |
-| --- | --- |
-| Zustand | Auth session, current user, current room, socket connection, transient UI |
-| TanStack Query | REST resources: rooms, message history, notifications, profiles |
+| Store          | Owns                                                                      |
+| -------------- | ------------------------------------------------------------------------- |
+| Zustand        | Auth session, current user, current room, socket connection, transient UI |
+| TanStack Query | REST resources: rooms, message history, notifications, profiles           |
 
 Realtime events patch query caches (or room-scoped message lists) rather than
 duplicating server records in Zustand.
 
 ## Horizontal scaling
 
-| Concern | Mechanism |
-| --- | --- |
-| HTTP | Any instance; nginx load-balances |
-| WebSocket | Sticky or not: each socket lives on one instance; events fan out via Redis |
-| Auth sessions | JWT + hashed refresh tokens in MongoDB |
-| Presence | Redis keys + Pub/Sub |
-| Rate limits | Redis counters |
-| Message history | MongoDB |
+| Concern         | Mechanism                                                                  |
+| --------------- | -------------------------------------------------------------------------- |
+| HTTP            | Any instance; nginx load-balances                                          |
+| WebSocket       | Sticky or not: each socket lives on one instance; events fan out via Redis |
+| Auth sessions   | JWT + hashed refresh tokens in MongoDB                                     |
+| Presence        | Redis keys + Pub/Sub                                                       |
+| Rate limits     | Redis counters                                                             |
+| Message history | MongoDB                                                                    |
 
 Adding an API replica does not require a Socket.IO adapter. It requires the
 new process to use the same `REDIS_URL` and `MONGODB_URI`, and to keep a

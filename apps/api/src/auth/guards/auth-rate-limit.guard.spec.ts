@@ -43,9 +43,9 @@ describe('AuthRateLimitGuard', () => {
   it('rejects login attempts over the configured limit', async () => {
     incrementWithTtl.mockResolvedValue(6);
 
-    await expect(guard.canActivate(createContext('/api/auth/login') as never)).rejects.toBeInstanceOf(
-      ApiException,
-    );
+    await expect(
+      guard.canActivate(createContext('/api/auth/login') as never),
+    ).rejects.toBeInstanceOf(ApiException);
 
     try {
       await guard.canActivate(createContext('/api/auth/login') as never);

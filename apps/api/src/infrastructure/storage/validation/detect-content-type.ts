@@ -1,13 +1,13 @@
-import {
-  type AllowedAttachmentMimeType,
-} from '@pulse-chat/shared';
+import { type AllowedAttachmentMimeType } from '@pulse-chat/shared';
 
 const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 const JPEG_SIGNATURE = Buffer.from([0xff, 0xd8, 0xff]);
 const PDF_SIGNATURE = Buffer.from('%PDF-');
 
 function startsWith(buffer: Buffer, signature: Buffer): boolean {
-  return buffer.length >= signature.length && buffer.subarray(0, signature.length).equals(signature);
+  return (
+    buffer.length >= signature.length && buffer.subarray(0, signature.length).equals(signature)
+  );
 }
 
 function isGif(buffer: Buffer): boolean {

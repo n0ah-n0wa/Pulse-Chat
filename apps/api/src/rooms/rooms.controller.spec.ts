@@ -81,7 +81,7 @@ describe('RoomsController', () => {
       .set(bearerAuthorization(outsider.accessToken))
       .expect(200);
 
-    expect((listed.body as { id: string }[])).toEqual(
+    expect(listed.body as { id: string }[]).toEqual(
       expect.arrayContaining([expect.objectContaining({ id: createdRoomId(created.body) })]),
     );
   });

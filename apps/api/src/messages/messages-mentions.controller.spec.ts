@@ -273,7 +273,11 @@ describe('Message @username mentions', () => {
 
   it('does not treat email addresses as mentions', async () => {
     const author = await registerTestUser(httpServer, { username: 'mention_email_author' });
-    const roomId = await createPublicRoom(httpServer, author.accessToken, 'Email False Positive Room');
+    const roomId = await createPublicRoom(
+      httpServer,
+      author.accessToken,
+      'Email False Positive Room',
+    );
 
     await request(httpServer)
       .post(`/api/rooms/${roomId}/messages`)

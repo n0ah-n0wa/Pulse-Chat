@@ -43,7 +43,11 @@ export class MongooseMessageReactionRepository implements MessageReactionReposit
     return toReactionRecord(document);
   }
 
-  async deleteByMessageUserAndEmoji(messageId: string, userId: string, emoji: string): Promise<boolean> {
+  async deleteByMessageUserAndEmoji(
+    messageId: string,
+    userId: string,
+    emoji: string,
+  ): Promise<boolean> {
     const result = await this.reactionModel
       .deleteOne({
         messageId: new Types.ObjectId(messageId),

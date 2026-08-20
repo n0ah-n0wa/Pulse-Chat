@@ -1,4 +1,10 @@
-import { HttpStatus, Inject, Injectable, type CanActivate, type ExecutionContext } from '@nestjs/common';
+import {
+  HttpStatus,
+  Inject,
+  Injectable,
+  type CanActivate,
+  type ExecutionContext,
+} from '@nestjs/common';
 import type { Request } from 'express';
 
 import { API_ERROR_CODES } from '@pulse-chat/shared';

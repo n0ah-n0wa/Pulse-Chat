@@ -3,7 +3,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NOTIFICATION_ERROR_CODES, NOTIFICATION_TYPES } from '@pulse-chat/shared';
 
 import type { RealtimeMessageBroadcastService } from '../realtime/realtime-message-broadcast.service.js';
-import type { NotificationRecord, NotificationRepository } from './notification.repository.interface.js';
+import type {
+  NotificationRecord,
+  NotificationRepository,
+} from './notification.repository.interface.js';
 import { NotificationsService } from './notifications.service.js';
 
 const USER_ID = '507f1f77bcf86cd799439011';
@@ -116,17 +119,17 @@ describe('NotificationsService', () => {
   it('rejects an invalid cursor (wrong owner)', async () => {
     findById.mockResolvedValue(notifRecord({ userId: ACTOR_ID }));
 
-    await expect(
-      service.listNotifications(USER_ID, { before: NOTIF_ID }),
-    ).rejects.toMatchObject({ code: NOTIFICATION_ERROR_CODES.NOTIFICATION_NOT_FOUND });
+    await expect(service.listNotifications(USER_ID, { before: NOTIF_ID })).rejects.toMatchObject({
+      code: NOTIFICATION_ERROR_CODES.NOTIFICATION_NOT_FOUND,
+    });
   });
 
   it('rejects a non-existent cursor', async () => {
     findById.mockResolvedValue(null);
 
-    await expect(
-      service.listNotifications(USER_ID, { before: NOTIF_ID }),
-    ).rejects.toMatchObject({ code: NOTIFICATION_ERROR_CODES.NOTIFICATION_NOT_FOUND });
+    await expect(service.listNotifications(USER_ID, { before: NOTIF_ID })).rejects.toMatchObject({
+      code: NOTIFICATION_ERROR_CODES.NOTIFICATION_NOT_FOUND,
+    });
   });
 
   // ---------------------------------------------------------------------------

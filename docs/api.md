@@ -37,9 +37,9 @@ POST /api/rooms/:roomId/attachments
 Content-Type: multipart/form-data
 ```
 
-| Field | Type   | Required | Description        |
-| ----- | ------ | -------- | ------------------ |
-| file  | binary | yes      | Image or document  |
+| Field | Type   | Required | Description       |
+| ----- | ------ | -------- | ----------------- |
+| file  | binary | yes      | Image or document |
 
 **Authorization:** room member.
 
@@ -64,12 +64,12 @@ Content-Type: multipart/form-data
 
 **Errors:**
 
-| Code | When |
-| ---- | ---- |
-| `FILE_TOO_LARGE` | Exceeds 10 MiB |
-| `INVALID_FILE_TYPE` | Content not allowed |
-| `INVALID_FILENAME` | Filename unusable after sanitization |
-| `NOT_A_MEMBER` | Caller is not a room member |
+| Code                | When                                 |
+| ------------------- | ------------------------------------ |
+| `FILE_TOO_LARGE`    | Exceeds 10 MiB                       |
+| `INVALID_FILE_TYPE` | Content not allowed                  |
+| `INVALID_FILENAME`  | Filename unusable after sanitization |
+| `NOT_A_MEMBER`      | Caller is not a room member          |
 
 ### Download
 
@@ -114,9 +114,9 @@ Content-Type: application/json
 }
 ```
 
-| Field | Max | Notes |
-| ----- | --- | ----- |
-| `attachmentIds` | 10 | Must be ids returned from upload; same room; uploader must be the caller; not already linked |
+| Field           | Max | Notes                                                                                        |
+| --------------- | --- | -------------------------------------------------------------------------------------------- |
+| `attachmentIds` | 10  | Must be ids returned from upload; same room; uploader must be the caller; not already linked |
 
 Message list/history responses include full `AttachmentResponse` objects under
 each message's `attachments` array. Deleted messages redact attachment metadata
@@ -124,21 +124,21 @@ in API responses.
 
 **Errors:**
 
-| Code | When |
-| ---- | ---- |
-| `ATTACHMENT_NOT_FOUND` | Unknown or deleted id |
-| `ATTACHMENT_ACCESS_DENIED` | Wrong room, wrong uploader, or duplicate ids |
-| `ATTACHMENT_ALREADY_LINKED` | Attachment already used on another message |
-| `ATTACHMENT_LIMIT_EXCEEDED` | More than 10 attachments |
+| Code                        | When                                         |
+| --------------------------- | -------------------------------------------- |
+| `ATTACHMENT_NOT_FOUND`      | Unknown or deleted id                        |
+| `ATTACHMENT_ACCESS_DENIED`  | Wrong room, wrong uploader, or duplicate ids |
+| `ATTACHMENT_ALREADY_LINKED` | Attachment already used on another message   |
+| `ATTACHMENT_LIMIT_EXCEEDED` | More than 10 attachments                     |
 
 ## Messages (summary)
 
-| Method | Path | Description |
-| ------ | ---- | ----------- |
-| GET | `/api/rooms/:id/messages` | Cursor-paginated history |
-| GET | `/api/rooms/:id/messages/search?q=` | Search within room |
-| POST | `/api/rooms/:id/messages` | Create message (optional `attachmentIds`) |
-| PATCH | `/api/messages/:id` | Edit message |
-| DELETE | `/api/messages/:id` | Soft-delete message |
+| Method | Path                                | Description                               |
+| ------ | ----------------------------------- | ----------------------------------------- |
+| GET    | `/api/rooms/:id/messages`           | Cursor-paginated history                  |
+| GET    | `/api/rooms/:id/messages/search?q=` | Search within room                        |
+| POST   | `/api/rooms/:id/messages`           | Create message (optional `attachmentIds`) |
+| PATCH  | `/api/messages/:id`                 | Edit message                              |
+| DELETE | `/api/messages/:id`                 | Soft-delete message                       |
 
 See `SPECIFICATION.md` sections 12–20 for pagination, search, and validation rules.

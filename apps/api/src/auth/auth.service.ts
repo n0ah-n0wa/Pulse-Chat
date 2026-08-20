@@ -32,8 +32,7 @@ import {
  * Precomputed bcrypt hash used when no user exists so login always performs a
  * password comparison and does not leak account existence through timing.
  */
-const DUMMY_PASSWORD_HASH =
-  '$2b$12$t8Z4vLtbEoq/vMkN8XmXJuUSJbjCC2zEWfhpKgxWaJ6tPK4BfVh6u';
+const DUMMY_PASSWORD_HASH = '$2b$12$t8Z4vLtbEoq/vMkN8XmXJuUSJbjCC2zEWfhpKgxWaJ6tPK4BfVh6u';
 
 @Injectable()
 export class AuthService {
@@ -143,7 +142,11 @@ export class AuthService {
     const user = await this.users.findById(userId);
 
     if (user === null) {
-      throw new ApiException(USER_ERROR_CODES.USER_NOT_FOUND, 'User not found.', HttpStatus.NOT_FOUND);
+      throw new ApiException(
+        USER_ERROR_CODES.USER_NOT_FOUND,
+        'User not found.',
+        HttpStatus.NOT_FOUND,
+      );
     }
 
     return toCurrentUserProfile(user);

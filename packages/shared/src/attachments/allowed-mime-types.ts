@@ -11,9 +11,7 @@ export const ALLOWED_ATTACHMENT_MIME_TYPES = [
 export type AllowedAttachmentMimeType = (typeof ALLOWED_ATTACHMENT_MIME_TYPES)[number];
 
 /** File extensions derived from detected MIME types, never from client input. */
-export const ATTACHMENT_MIME_TO_EXTENSION: Readonly<
-  Record<AllowedAttachmentMimeType, string>
-> = {
+export const ATTACHMENT_MIME_TO_EXTENSION: Readonly<Record<AllowedAttachmentMimeType, string>> = {
   'image/jpeg': 'jpg',
   'image/png': 'png',
   'image/gif': 'gif',

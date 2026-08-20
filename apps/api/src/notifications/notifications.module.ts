@@ -13,9 +13,7 @@ import { NotificationsService } from './notifications.service.js';
   imports: [
     AuthModule,
     RealtimeBroadcastModule,
-    MongooseModule.forFeature([
-      { name: NotificationDocument.name, schema: NotificationSchema },
-    ]),
+    MongooseModule.forFeature([{ name: NotificationDocument.name, schema: NotificationSchema }]),
   ],
   controllers: [NotificationsController],
   providers: [

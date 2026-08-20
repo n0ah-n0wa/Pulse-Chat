@@ -7,7 +7,10 @@ import { NotificationsModule } from '../notifications/notifications.module.js';
 import { RoomsModule } from '../rooms/rooms.module.js';
 import { UsersPersistenceModule } from '../users/users-persistence.module.js';
 import { MessageIndexInitializer } from './infrastructure/message-index.initializer.js';
-import { MessageReactionDocument, MessageReactionSchema } from './infrastructure/message-reaction.schema.js';
+import {
+  MessageReactionDocument,
+  MessageReactionSchema,
+} from './infrastructure/message-reaction.schema.js';
 import { MessageDocument, MessageSchema } from './infrastructure/message.schema.js';
 import { mongooseMessageReactionRepositoryProviders } from './infrastructure/mongoose-message-reaction.repository.js';
 import { mongooseMessageRepositoryProviders } from './infrastructure/mongoose-message.repository.js';

@@ -72,10 +72,7 @@ export class RoomsController {
   @Delete(':id')
   @HttpCode(204)
   @ApiOperation({ summary: 'Delete a room' })
-  delete(
-    @CurrentUser() currentUser: AuthenticatedUser,
-    @Param('id') id: string,
-  ): Promise<void> {
+  delete(@CurrentUser() currentUser: AuthenticatedUser, @Param('id') id: string): Promise<void> {
     return this.roomsService.deleteRoom(currentUser.userId, id);
   }
 

@@ -32,7 +32,9 @@ export interface NotificationRepository {
    * referenceId, actorId) combination does not already exist.
    * Returns the existing or newly created record.
    */
-  findOrCreate(input: CreateNotificationInput): Promise<{ record: NotificationRecord; created: boolean }>;
+  findOrCreate(
+    input: CreateNotificationInput,
+  ): Promise<{ record: NotificationRecord; created: boolean }>;
 
   findPage(options: FindNotificationsPageOptions): Promise<NotificationRecord[]>;
 

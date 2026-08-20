@@ -235,7 +235,9 @@ export class RoomsService {
 
     const created = await this.createMembership(room.id, input.userId, role);
 
-    void this.notificationsService.notifyRoomInvitation(actorId, input.userId, room.id).catch(() => undefined);
+    void this.notificationsService
+      .notifyRoomInvitation(actorId, input.userId, room.id)
+      .catch(() => undefined);
 
     return toRoomMemberResponse(created);
   }
@@ -447,12 +449,20 @@ export class RoomsService {
 
   private async requireUser(userId: string): Promise<void> {
     if (!isValidObjectId(userId)) {
-      throw new ApiException(USER_ERROR_CODES.USER_NOT_FOUND, 'User not found.', HttpStatus.NOT_FOUND);
+      throw new ApiException(
+        USER_ERROR_CODES.USER_NOT_FOUND,
+        'User not found.',
+        HttpStatus.NOT_FOUND,
+      );
     }
 
     const user = await this.users.findById(userId);
     if (user === null) {
-      throw new ApiException(USER_ERROR_CODES.USER_NOT_FOUND, 'User not found.', HttpStatus.NOT_FOUND);
+      throw new ApiException(
+        USER_ERROR_CODES.USER_NOT_FOUND,
+        'User not found.',
+        HttpStatus.NOT_FOUND,
+      );
     }
   }
 
@@ -486,7 +496,11 @@ export class RoomsService {
   }
 
   private roomNotFound(): ApiException {
-    return new ApiException(ROOM_ERROR_CODES.ROOM_NOT_FOUND, 'Room not found.', HttpStatus.NOT_FOUND);
+    return new ApiException(
+      ROOM_ERROR_CODES.ROOM_NOT_FOUND,
+      'Room not found.',
+      HttpStatus.NOT_FOUND,
+    );
   }
 
   private throwInsufficientRole(): never {

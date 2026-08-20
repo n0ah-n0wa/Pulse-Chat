@@ -31,7 +31,9 @@ describe('realtime bus envelope serialization', () => {
   it('rejects malformed payloads instead of throwing', () => {
     expect(deserializeRealtimeBusEnvelope('not-json')).toBeNull();
     expect(deserializeRealtimeBusEnvelope('{}')).toBeNull();
-    expect(deserializeRealtimeBusEnvelope(JSON.stringify({ version: 2, event: 'message:new' }))).toBeNull();
+    expect(
+      deserializeRealtimeBusEnvelope(JSON.stringify({ version: 2, event: 'message:new' })),
+    ).toBeNull();
     expect(
       deserializeRealtimeBusEnvelope(
         JSON.stringify({

@@ -82,11 +82,7 @@ export class NotificationsService {
   // Convenience helpers called by other services
   // ---------------------------------------------------------------------------
 
-  async notifyMention(
-    actorId: string,
-    recipientId: string,
-    messageId: string,
-  ): Promise<void> {
+  async notifyMention(actorId: string, recipientId: string, messageId: string): Promise<void> {
     if (actorId === recipientId) {
       return;
     }
@@ -99,11 +95,7 @@ export class NotificationsService {
     });
   }
 
-  async notifyReply(
-    actorId: string,
-    originalAuthorId: string,
-    messageId: string,
-  ): Promise<void> {
+  async notifyReply(actorId: string, originalAuthorId: string, messageId: string): Promise<void> {
     if (actorId === originalAuthorId) {
       return;
     }
@@ -133,11 +125,7 @@ export class NotificationsService {
     });
   }
 
-  async notifyRoomInvitation(
-    actorId: string,
-    recipientId: string,
-    roomId: string,
-  ): Promise<void> {
+  async notifyRoomInvitation(actorId: string, recipientId: string, roomId: string): Promise<void> {
     if (actorId === recipientId) {
       return;
     }

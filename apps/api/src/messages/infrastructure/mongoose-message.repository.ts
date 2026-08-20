@@ -48,7 +48,9 @@ export class MongooseMessageRepository implements MessageRepository {
       content: input.content,
       clientMessageId: input.clientMessageId,
       replyToMessageId:
-        input.replyToMessageId === undefined ? undefined : new Types.ObjectId(input.replyToMessageId),
+        input.replyToMessageId === undefined
+          ? undefined
+          : new Types.ObjectId(input.replyToMessageId),
       attachments: (input.attachmentIds ?? []).map((id) => ({ id })),
     });
 

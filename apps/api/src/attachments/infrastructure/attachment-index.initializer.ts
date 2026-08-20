@@ -8,7 +8,8 @@ import { AttachmentDocument } from './attachment.schema.js';
 @Injectable()
 export class AttachmentIndexInitializer implements OnModuleInit {
   constructor(
-    @InjectModel(AttachmentDocument.name) private readonly attachmentModel: Model<AttachmentDocument>,
+    @InjectModel(AttachmentDocument.name)
+    private readonly attachmentModel: Model<AttachmentDocument>,
   ) {}
 
   async onModuleInit(): Promise<void> {

@@ -170,7 +170,9 @@ export class AttachmentsService {
       return [];
     }
 
-    const records = await this.attachments.findByIds(attachmentRefs.map((reference) => reference.id));
+    const records = await this.attachments.findByIds(
+      attachmentRefs.map((reference) => reference.id),
+    );
     const recordMap = new Map(records.map((record) => [record.id, record]));
     const responses: AttachmentResponse[] = [];
 

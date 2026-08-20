@@ -17,14 +17,14 @@ describe('message permissions', () => {
     expect(canDeleteMessage(AUTHOR_ID, AUTHOR_ID, member)).toBe(true);
   });
 
-  it('lets moderators and owners manage other members\' messages', () => {
+  it("lets moderators and owners manage other members' messages", () => {
     expect(canEditMessage(OTHER_ID, AUTHOR_ID, moderator)).toBe(true);
     expect(canDeleteMessage(OTHER_ID, AUTHOR_ID, moderator)).toBe(true);
     expect(canEditMessage(OTHER_ID, AUTHOR_ID, owner)).toBe(true);
     expect(canDeleteMessage(OTHER_ID, AUTHOR_ID, owner)).toBe(true);
   });
 
-  it('forbids members from managing someone else\'s messages', () => {
+  it("forbids members from managing someone else's messages", () => {
     expect(canEditMessage(OTHER_ID, AUTHOR_ID, member)).toBe(false);
     expect(canDeleteMessage(OTHER_ID, AUTHOR_ID, member)).toBe(false);
     expect(canEditMessage(OTHER_ID, AUTHOR_ID, null)).toBe(false);

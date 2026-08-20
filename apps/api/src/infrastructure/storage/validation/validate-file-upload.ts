@@ -1,15 +1,9 @@
 import { HttpStatus } from '@nestjs/common';
 
-import {
-  ATTACHMENT_ERROR_CODES,
-  ATTACHMENT_MAX_BYTES,
-} from '@pulse-chat/shared';
+import { ATTACHMENT_ERROR_CODES, ATTACHMENT_MAX_BYTES } from '@pulse-chat/shared';
 
 import { ApiException } from '../../../common/errors/api.exception.js';
-import type {
-  FileUploadInput,
-  ValidatedFileUpload,
-} from '../file-storage.interface.js';
+import type { FileUploadInput, ValidatedFileUpload } from '../file-storage.interface.js';
 import { detectContentType } from './detect-content-type.js';
 import { generateStorageKey } from './generate-storage-key.js';
 import { sanitizeFilename } from './sanitize-filename.js';

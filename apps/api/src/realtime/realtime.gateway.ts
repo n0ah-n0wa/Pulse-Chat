@@ -28,7 +28,10 @@ import type { Server } from 'socket.io';
   transports: ['websocket'],
 })
 export class RealtimeGateway
-  implements OnGatewayInit, OnGatewayConnection<AuthenticatedSocket>, OnGatewayDisconnect<AuthenticatedSocket>
+  implements
+    OnGatewayInit,
+    OnGatewayConnection<AuthenticatedSocket>,
+    OnGatewayDisconnect<AuthenticatedSocket>
 {
   constructor(
     private readonly authentication: RealtimeAuthenticationService,
@@ -111,7 +114,10 @@ export class RealtimeGateway
     @MessageBody() payload: unknown,
   ): Promise<void> {
     await this.executeWithValidation(socket, () =>
-      this.messages.sendMessage(socket, payload as { roomId: string; content: string; clientMessageId: string }),
+      this.messages.sendMessage(
+        socket,
+        payload as { roomId: string; content: string; clientMessageId: string },
+      ),
     );
   }
 

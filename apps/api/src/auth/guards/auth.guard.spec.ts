@@ -56,7 +56,9 @@ describe('AuthGuard', () => {
 
     try {
       guard.canActivate(
-        createContext({ headers: { authorization: 'Bearer expired' } } as AuthenticatedRequest) as never,
+        createContext({
+          headers: { authorization: 'Bearer expired' },
+        } as AuthenticatedRequest) as never,
       );
     } catch (error) {
       expect(error).toBeInstanceOf(ApiException);

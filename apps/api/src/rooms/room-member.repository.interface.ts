@@ -23,7 +23,11 @@ export interface RoomMemberRepository {
   findByRoomAndUser(roomId: string, userId: string): Promise<RoomMemberRecord | null>;
   findByRoomId(roomId: string): Promise<RoomMemberRecord[]>;
   findByUserId(userId: string): Promise<RoomMemberRecord[]>;
-  updateRole(roomId: string, userId: string, role: MembershipRole): Promise<RoomMemberRecord | null>;
+  updateRole(
+    roomId: string,
+    userId: string,
+    role: MembershipRole,
+  ): Promise<RoomMemberRecord | null>;
   deleteByRoomAndUser(roomId: string, userId: string): Promise<boolean>;
   deleteByRoomId(roomId: string): Promise<void>;
   countByRoomId(roomId: string): Promise<number>;

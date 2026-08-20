@@ -72,13 +72,15 @@ export class RoomMessagesController {
     @Param('id') roomId: string,
     @Body(new ZodValidationPipe(createMessageSchema)) body: CreateMessageInput,
   ): Promise<MessageResponse> {
-    return this.messagesService.createMessage(currentUser.userId, roomId, body).then(async (result) => {
-      if (result.created) {
-        await this.realtimeBroadcast.broadcastNew(roomId, result.message);
-      }
+    return this.messagesService
+      .createMessage(currentUser.userId, roomId, body)
+      .then(async (result) => {
+        if (result.created) {
+          await this.realtimeBroadcast.broadcastNew(roomId, result.message);
+        }
 
-      return result.message;
-    });
+        return result.message;
+      });
   }
 }
 
@@ -107,7 +109,10 @@ export class MessagesController {
   @Delete(':id')
   @HttpCode(204)
   @ApiOperation({ summary: 'Soft-delete a message' })
-  async delete(@CurrentUser() currentUser: AuthenticatedUser, @Param('id') id: string): Promise<void> {
+  async delete(
+    @CurrentUser() currentUser: AuthenticatedUser,
+    @Param('id') id: string,
+  ): Promise<void> {
     const message = await this.messagesService.deleteMessage(currentUser.userId, id);
     await this.realtimeBroadcast.broadcastDeleted(message.roomId, message);
   }

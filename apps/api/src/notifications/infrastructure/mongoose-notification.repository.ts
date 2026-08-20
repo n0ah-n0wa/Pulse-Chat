@@ -12,10 +12,7 @@ import type {
   NotificationRepository,
 } from '../notification.repository.interface.js';
 import { NOTIFICATION_REPOSITORY } from '../notifications.tokens.js';
-import {
-  NotificationDocument,
-  type NotificationDocumentHydrated,
-} from './notification.schema.js';
+import { NotificationDocument, type NotificationDocumentHydrated } from './notification.schema.js';
 
 function toNotificationRecord(document: NotificationDocumentHydrated): NotificationRecord {
   return {
