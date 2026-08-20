@@ -1,0 +1,221 @@
+# Development stack: docker compose up
+#
+# Scoped entirely to local development:
+#   - MongoDB and Redis run without authentication, so there are no credentials
+#     to hardcode anywhere;
+#   - the repository is mounted and every service runs in watch mode;
+#   - nginx fronts the stack on http://localhost:8080 so the browser sees a
+#     single origin, as it will in production.
+#
+# Services address each other by service name (mongodb, redis, api, web) on the
+# default compose network. localhost inside a container is that container only.
+#
+# Production concerns are deliberately absent: built images, credentials, TLS
+# and multiple API instances belong to the production infrastructure phase.
+# See docs/deployment.md.
+
+name: pulse-chat
+
+x-dev-image: &dev-image
+  build:
+    context: .
+    dockerfile: infrastructure/docker/dev.Dockerfile
+  image: pulse-chat-dev:local
+
+# The repository is mounted so edits need no rebuild. The named volumes keep the
+# Linux dependency trees installed in the image from being shadowed by the
+# host's node_modules, which hold native bindings for the host platform.
+x-dev-volumes: &dev-volumes
+  - .:/app
+  - workspace-node-modules:/app/node_modules
+  - api-node-modules:/app/apps/api/node_modules
+  - web-node-modules:/app/apps/web/node_modules
+  - shared-node-modules:/app/packages/shared/node_modules
+  - config-node-modules:/app/packages/config/node_modules
+  - eslint-config-node-modules:/app/packages/eslint-config/node_modules
+
+services:
+  mongodb:
+    image: mongo:8.0
+    restart: unless-stopped
+    command:
+      - mongod
+      - --bind_ip_all
+      # The Docker VM has a few gigabytes in total; the default cache would
+      # claim most of it and starve the application containers.
+      - --wiredTigerCacheSizeGB=0.5
+    environment:
+      MONGO_INITDB_DATABASE: pulse_chat
+    # Bound to the loopback interface only: this instance has no authentication,
+    # so it must not be reachable from the network.
+    ports:
+      - '127.0.0.1:27017:27017'
+    volumes:
+      - mongodb-data:/data/db
+    healthcheck:
+      test:
+        ['CMD', 'mongosh', '--quiet', '--eval', "db.adminCommand('ping').ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+
+  redis:
+    image: redis:8.10-alpine
+    restart: unless-stopped
+    # Redis holds only ephemeral state: presence, typing, rate limit counters and
+    # pub/sub fan-out. Persistence is therefore off, and nothing here is expected
+    # to survive a restart. noeviction makes memory pressure fail loudly instead
+    # of silently discarding presence keys.
+    command:
+      - redis-server
+      - --save
+      - ''
+      - --appendonly
+      - 'no'
+      - --maxmemory
+      - 256mb
+      - --maxmemory-policy
+      - noeviction
+    ports:
+      - '127.0.0.1:6379:6379'
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 10s
+      timeout: 3s
+      retries: 12
+      start_period: 5s
+
+  # Owns dependency installation and the @pulse-chat/shared build, so api and web
+  # never race on the same output. Both wait for its health check, which only
+  # passes once this run has finished installing and compiling.
+  workspace:
+    <<: *dev-image
+    command:
+      - sh
+      - -c
+      - |
+        set -e
+        pnpm install --frozen-lockfile --prefer-offline
+        pnpm --filter @pulse-chat/shared build
+        touch /tmp/workspace-ready
+        exec pnpm --filter @pulse-chat/shared dev
+    environment:
+      # File change events do not cross the bind mount from the host, so the
+      # TypeScript watcher has to poll.
+      TSC_WATCHFILE: PriorityPollingInterval
+      TSC_WATCHDIRECTORY: DynamicPriorityPolling
+    volumes: *dev-volumes
+    healthcheck:
+      test: ['CMD-SHELL', 'test -f /tmp/workspace-ready']
+      interval: 5s
+      timeout: 3s
+      retries: 60
+      start_period: 10s
+
+  api:
+    <<: *dev-image
+    command: ['pnpm', '--filter', '@pulse-chat/api', 'dev']
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      workspace:
+        condition: service_healthy
+    environment:
+      NODE_ENV: development
+      PORT: '3000'
+      # Docker service names, not localhost.
+      MONGODB_URI: mongodb://mongodb:27017/pulse_chat
+      REDIS_URL: redis://redis:6379
+      CORS_ORIGIN: http://localhost:8080
+      FILE_STORAGE_PROVIDER: local
+      FILE_STORAGE_PATH: ./storage
+      RATE_LIMIT_MESSAGES: '20'
+      RATE_LIMIT_LOGIN: '5'
+      RATE_LIMIT_REGISTER: '5'
+      RATE_LIMIT_AUTH_WINDOW_SECONDS: '60'
+      # JWT secrets are optional in development; insecure placeholders are applied
+      # at startup when these are absent. Set real values before production.
+    # Optional overrides and, from the authentication phase onwards, secrets.
+    # Absent by default so that a clean checkout starts without setup.
+    env_file:
+      - path: .env
+        required: false
+    volumes: *dev-volumes
+    ports:
+      - '127.0.0.1:3000:3000'
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://127.0.0.1:3000/health/liveness').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+
+  web:
+    <<: *dev-image
+    command: ['pnpm', '--filter', '@pulse-chat/web', 'dev']
+    depends_on:
+      workspace:
+        condition: service_healthy
+    environment:
+      # Makes the dev server listen on all interfaces and poll for changes.
+      PULSE_DEV_CONTAINER: 'true'
+    volumes: *dev-volumes
+    ports:
+      - '127.0.0.1:5173:5173'
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://127.0.0.1:5173/').then(() => process.exit(0), () => process.exit(1))",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+
+  nginx:
+    image: nginx:1.30-alpine
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_started
+      web:
+        condition: service_started
+    ports:
+      - '127.0.0.1:8080:80'
+    volumes:
+      - ./infrastructure/nginx/dev.conf:/etc/nginx/conf.d/default.conf:ro
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'wget',
+          '--quiet',
+          '--tries=1',
+          '--spider',
+          'http://127.0.0.1/nginx-health',
+        ]
+      interval: 10s
+      timeout: 3s
+      retries: 6
+      start_period: 5s
+
+volumes:
+  mongodb-data:
+  workspace-node-modules:
+  api-node-modules:
+  web-node-modules:
+  shared-node-modules:
+  config-node-modules:
+  eslint-config-node-modules:

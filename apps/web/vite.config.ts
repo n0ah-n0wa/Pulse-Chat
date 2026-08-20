@@ -2,10 +2,26 @@ import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vitest/config';
 
+// Set by docker-compose.yml. In a container the dev server has to listen on
+// every interface to be reachable, and file change events do not cross the bind
+// mount from the host, so the watcher polls instead.
+const inContainer = process.env['PULSE_DEV_CONTAINER'] === 'true';
+
 export default defineConfig({
   plugins: [react(), tailwindcss()],
   server: {
+    host: inContainer ? '0.0.0.0' : 'localhost',
     port: 5173,
+    strictPort: true,
+    watch: inContainer ? { usePolling: true, interval: 400 } : undefined,
+    // When Vite runs without the nginx dev proxy, forward API and Socket.IO to
+    // the backend so relative /api and /socket.io URLs keep working.
+    proxy: inContainer
+      ? undefined
+      : {
+          '/api': { target: 'http://localhost:3000', changeOrigin: true },
+          '/socket.io': { target: 'http://localhost:3000', ws: true, changeOrigin: true },
+        },
   },
   build: {
     outDir: 'dist',

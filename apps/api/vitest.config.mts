@@ -17,7 +17,12 @@ export default defineConfig({
   test: {
     environment: 'node',
     include: ['src/**/*.spec.ts'],
-    setupFiles: ['reflect-metadata'],
+    setupFiles: ['reflect-metadata', './src/test/env.ts'],
     restoreMocks: true,
+    hookTimeout: 180_000,
+    testTimeout: 30_000,
+    // mongodb-memory-server cannot start many mongod processes at once on
+    // Windows; one worker also lets the shared in-memory URI actually be shared.
+    fileParallelism: false,
   },
 });

@@ -1,0 +1,25 @@
+# Keep host artifacts, secrets and documentation out of build contexts.
+# Host node_modules must never reach an image: they contain Windows/macOS
+# native bindings that cannot run in a Linux container.
+**/node_modules
+**/dist
+**/.turbo
+**/coverage
+**/*.tsbuildinfo
+**/*.log
+
+.git
+.github
+.gitignore
+.gitattributes
+.vscode
+.idea
+
+.env
+.env.*
+!.env.example
+
+docs/
+README.md
+AGENTS.md
+SPECIFICATION.md

@@ -22,8 +22,8 @@ pulse-chat/
 │   ├── eslint-config/       Shared ESLint flat configurations
 │   └── shared/              Types, schemas and constants shared by both apps
 ├── infrastructure/
-│   ├── docker/              Container build context (Phase 12)
-│   └── nginx/               Reverse proxy configuration (Phase 12)
+│   ├── docker/              Image definitions (development and production)
+│   └── nginx/               Reverse proxy and static serving configuration
 ├── docs/                    Architecture, API, security and decision records
 └── .github/workflows/       CI pipeline
 ```
@@ -40,6 +40,51 @@ pulse-chat/
 ```bash
 pnpm install
 pnpm verify      # lint + typecheck + test + build
+```
+
+## Running with Docker
+
+The development stack needs no configuration:
+
+```bash
+docker compose up
+```
+
+Then open <http://localhost:8080>. Nginx fronts the stack, so the browser uses a
+single origin: `/` reaches the Vite dev server and `/api` and `/socket.io` reach
+the backend. Services address each other by Docker service name (`mongodb`,
+`redis`, `api`, `web`), never `localhost`.
+
+| Service     | Purpose                                              | Host port       |
+| ----------- | ---------------------------------------------------- | --------------- |
+| `nginx`     | Single entry point, WebSocket upgrade                | 8080            |
+| `web`       | Vite dev server                                      | 127.0.0.1:5173  |
+| `api`       | NestJS in watch mode                                 | 127.0.0.1:3000  |
+| `workspace` | Installs dependencies, compiles `@pulse-chat/shared` | —               |
+| `mongodb`   | MongoDB 8, data in the `mongodb-data` volume         | 127.0.0.1:27017 |
+| `redis`     | Redis 8, no persistence (ephemeral state only)       | 127.0.0.1:6379  |
+
+MongoDB and Redis run without authentication and are bound to the loopback
+interface, so no credentials exist to leak. Copy `.env.example` to `.env` only
+to override a default or, later, to provide secrets; nothing is required to
+start.
+
+If you prefer to run the apps on your machine and only containerise the data
+stores:
+
+```bash
+docker compose up -d mongodb redis
+pnpm dev
+```
+
+Useful commands:
+
+```bash
+docker compose ps                 # health of every service
+docker compose logs -f api        # follow one service
+docker compose down               # stop, keeping the database volume
+docker compose down -v            # stop and discard all volumes
+docker compose build --no-cache   # rebuild after changing a Dockerfile
 ```
 
 ## Workspace commands

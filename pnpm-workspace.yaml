@@ -3,7 +3,11 @@ packages:
   - packages/*
 
 # pnpm blocks dependency lifecycle scripts by default. These packages ship
-# prebuilt native binaries that their install script links, so they are allowed.
+# prebuilt native binaries or download runtime assets during install, so they
+# are allowed.
 allowBuilds:
+  '@scarf/scarf': true
   '@swc/core': true
+  bcrypt: true
   esbuild: true
+  mongodb-memory-server: true

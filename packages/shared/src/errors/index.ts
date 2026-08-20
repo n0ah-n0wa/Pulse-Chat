@@ -1,0 +1,14 @@
+export type { ApiErrorBody, ApiErrorCode } from './api-error.js';
+export { API_ERROR_CODES } from './api-error.js';
+export type { AuthErrorCode } from '../auth/auth-error.js';
+export { AUTH_ERROR_CODES } from '../auth/auth-error.js';
+export type { UserErrorCode } from './user-error.js';
+export { USER_ERROR_CODES } from './user-error.js';
+export type { RoomErrorCode } from '../rooms/room-error.js';
+export { ROOM_ERROR_CODES } from '../rooms/room-error.js';
+export type { MessageErrorCode } from '../messages/message-error.js';
+export { MESSAGE_ERROR_CODES } from '../messages/message-error.js';
+export type { NotificationErrorCode } from '../notifications/notification-error.js';
+export { NOTIFICATION_ERROR_CODES } from '../notifications/notification-error.js';
+export type { AttachmentErrorCode } from '../attachments/attachment-error.js';
+export { ATTACHMENT_ERROR_CODES } from '../attachments/attachment-error.js';

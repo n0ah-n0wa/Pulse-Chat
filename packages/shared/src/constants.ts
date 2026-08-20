@@ -18,9 +18,21 @@ export const MESSAGE_PAGE_SIZE_DEFAULT = 50;
 /** Largest page size a client may request for message history (section 20). */
 export const MESSAGE_PAGE_SIZE_MAX = 100;
 
+/** Maximum length of a room message search query, in characters (section 19). */
+export const MESSAGE_SEARCH_QUERY_MAX_LENGTH = 200;
+
+/** Maximum attachments a single message may reference (section 18). */
+export const MESSAGE_MAX_ATTACHMENTS = 10;
+
 /** Username length bounds (section 7). */
 export const USERNAME_MIN_LENGTH = 3;
 export const USERNAME_MAX_LENGTH = 32;
 
 /** Milliseconds of inactivity after which a typing indicator expires (section 28). */
 export const TYPING_TIMEOUT_MS = 1500;
+
+/** Maximum attachment size in bytes — 10 MiB (specification section 18). */
+export const ATTACHMENT_MAX_BYTES = 10 * 1024 * 1024;
+
+/** Maximum length of a sanitized attachment filename, in characters (section 18). */
+export const ATTACHMENT_FILENAME_MAX_LENGTH = 255;

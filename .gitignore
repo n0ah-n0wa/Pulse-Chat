@@ -24,6 +24,11 @@ playwright-report/
 .env.*
 !.env.example
 
+# TLS inspection roots used for local image builds: generated per machine,
+# see infrastructure/docker/certs/README.md
+infrastructure/docker/certs/*.crt
+infrastructure/docker/certs/*.pem
+
 # Logs
 logs/
 *.log
