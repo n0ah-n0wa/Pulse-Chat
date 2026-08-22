@@ -8,6 +8,12 @@ export interface RoomResponse {
   readonly description?: string;
   readonly type: RoomType;
   readonly ownerId?: string;
+  /** The other participant in a direct room, from the current user's perspective. */
+  readonly peerUserId?: string;
+  /** Username of {@link peerUserId}, included so directory search does not need a second round trip. */
+  readonly peerUsername?: string;
+  /** Display name of {@link peerUserId}, included so directory search does not need a second round trip. */
+  readonly peerDisplayName?: string;
   readonly createdAt: string;
   readonly updatedAt: string;
   readonly currentUserRole?: MembershipRole;

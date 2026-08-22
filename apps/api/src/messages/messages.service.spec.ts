@@ -355,8 +355,8 @@ describe('MessagesService', () => {
     await vi.waitFor(() => {
       expect(notifyMention).toHaveBeenCalledTimes(1);
     });
-    expect(notifyMention).toHaveBeenCalledWith(USER_ID, OTHER_USER_ID, MESSAGE_ID);
-    expect(notifyMention).not.toHaveBeenCalledWith(USER_ID, outsiderId, MESSAGE_ID);
+    expect(notifyMention).toHaveBeenCalledWith(USER_ID, OTHER_USER_ID, MESSAGE_ID, ROOM_ID);
+    expect(notifyMention).not.toHaveBeenCalledWith(USER_ID, outsiderId, MESSAGE_ID, ROOM_ID);
   });
 
   it('validates a same-room reply target during creation', async () => {

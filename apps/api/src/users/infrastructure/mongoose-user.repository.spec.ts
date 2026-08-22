@@ -88,6 +88,41 @@ describe('MongooseUserRepository', () => {
     expect(found?.passwordHash).toBeUndefined();
   });
 
+  it('searches by username or display name and excludes a caller', async () => {
+    const alice = await createTestUser(repository, {
+      username: 'search_alice',
+      email: 'search_alice@example.com',
+      displayName: 'Alice Search',
+    });
+    const bob = await createTestUser(repository, {
+      username: 'search_bob',
+      email: 'search_bob@example.com',
+      displayName: 'Bob Builder',
+    });
+
+    const byUsername = await repository.searchByQuery({
+      text: 'search_bob',
+      limit: 20,
+      excludeUserId: alice.id,
+    });
+    expect(byUsername.map((user) => user.id)).toEqual([bob.id]);
+    expect(byUsername[0]?.passwordHash).toBeUndefined();
+
+    const byDisplayName = await repository.searchByQuery({
+      text: 'builder',
+      limit: 20,
+      excludeUserId: alice.id,
+    });
+    expect(byDisplayName.map((user) => user.id)).toEqual([bob.id]);
+
+    const excludingSelf = await repository.searchByQuery({
+      text: 'search_alice',
+      limit: 20,
+      excludeUserId: alice.id,
+    });
+    expect(excludingSelf).toEqual([]);
+  });
+
   it('updates profile fields', async () => {
     const created = await createTestUser(repository, {
       username: 'profile_user',

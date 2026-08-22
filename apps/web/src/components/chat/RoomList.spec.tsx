@@ -1,4 +1,5 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { createMemoryRouter, RouterProvider } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -107,6 +108,7 @@ describe('RoomList', () => {
     renderList();
     expect(await screen.findByRole('link', { name: /General/ })).toBeInTheDocument();
     expect(screen.getByRole('navigation', { name: 'Rooms' })).toHaveTextContent('Public');
+    expect(screen.getByLabelText('Search rooms and people')).toBeInTheDocument();
   });
 
   it('shows an unread badge from history that is newer than the read cursor', async () => {
@@ -211,5 +213,100 @@ describe('RoomList', () => {
     );
     renderList();
     expect(await screen.findByRole('button', { name: 'Join Town square' })).toBeInTheDocument();
+  });
+
+  it('shows the peer avatar on a direct conversation', async () => {
+    const peerUserId = '507f1f77bcf86cd799439012';
+    vi.spyOn(globalThis, 'fetch').mockImplementation((input) => {
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+      if (url.includes(`/api/users/${peerUserId}`)) {
+        return Promise.resolve(
+          jsonResponse({
+            id: peerUserId,
+            username: 'bob',
+            displayName: 'Bob',
+            avatarUrl: `/api/users/${peerUserId}/avatar`,
+            role: 'USER',
+            createdAt: '2026-08-18T00:00:00.000Z',
+          }),
+        );
+      }
+      return Promise.resolve(
+        jsonResponse([
+          {
+            id: '507f1f77bcf86cd799439022',
+            type: ROOM_TYPES.DIRECT,
+            peerUserId,
+            createdAt: '2026-08-18T00:00:00.000Z',
+            updatedAt: '2026-08-18T00:00:00.000Z',
+            currentUserRole: MEMBERSHIP_ROLES.MEMBER,
+          },
+        ]),
+      );
+    });
+
+    renderList();
+
+    expect(await screen.findByRole('img', { name: 'Bob avatar' })).toHaveAttribute(
+      'src',
+      `/api/users/${peerUserId}/avatar`,
+    );
+    expect(screen.getByRole('link', { name: /Bob/ })).toBeInTheDocument();
+  });
+
+  it('filters rooms and lists matching people', async () => {
+    const user = userEvent.setup();
+
+    vi.spyOn(globalThis, 'fetch').mockImplementation((input) => {
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+
+      if (url.includes('/api/users/search')) {
+        return Promise.resolve(
+          jsonResponse([
+            {
+              id: '507f1f77bcf86cd799439012',
+              username: 'maria',
+              displayName: 'Maria',
+              role: 'USER',
+              createdAt: '2026-08-18T00:00:00.000Z',
+            },
+          ]),
+        );
+      }
+
+      return Promise.resolve(
+        jsonResponse([
+          {
+            id: '507f1f77bcf86cd799439021',
+            name: 'General',
+            type: ROOM_TYPES.PUBLIC,
+            createdAt: '2026-08-18T00:00:00.000Z',
+            updatedAt: '2026-08-18T00:00:00.000Z',
+            currentUserRole: MEMBERSHIP_ROLES.MEMBER,
+          },
+          {
+            id: '507f1f77bcf86cd799439022',
+            name: 'Secret',
+            type: ROOM_TYPES.PRIVATE,
+            createdAt: '2026-08-18T00:00:00.000Z',
+            updatedAt: '2026-08-18T00:00:00.000Z',
+            currentUserRole: MEMBERSHIP_ROLES.MEMBER,
+          },
+        ]),
+      );
+    });
+
+    renderList();
+    expect(await screen.findByRole('link', { name: /General/ })).toBeInTheDocument();
+    await user.type(screen.getByLabelText('Search rooms and people'), 'secret');
+    expect(screen.queryByRole('link', { name: /General/ })).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Secret/ })).toBeInTheDocument();
+
+    await user.clear(screen.getByLabelText('Search rooms and people'));
+    await user.type(screen.getByLabelText('Search rooms and people'), 'maria');
+    await waitFor(() => {
+      expect(screen.getByText('Maria')).toBeInTheDocument();
+    });
+    expect(screen.getByText('@maria')).toBeInTheDocument();
   });
 });

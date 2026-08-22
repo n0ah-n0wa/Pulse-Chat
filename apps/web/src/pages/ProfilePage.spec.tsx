@@ -74,6 +74,7 @@ describe('ProfilePage', () => {
     expect(screen.queryByText('alice@example.com')).not.toBeInTheDocument();
     expect(screen.queryByText('bob@example.com')).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Edit profile' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Message' })).toBeInTheDocument();
   });
 
   it('lets the current user open settings from their profile', async () => {

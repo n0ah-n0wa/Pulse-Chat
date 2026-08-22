@@ -55,6 +55,7 @@ describe('RoomsService', () => {
   const findByRoomAndUser = vi.fn<RoomMemberRepository['findByRoomAndUser']>();
   const findByRoomId = vi.fn<RoomMemberRepository['findByRoomId']>();
   const findByUserId = vi.fn<RoomMemberRepository['findByUserId']>();
+  const findByRoomIds = vi.fn<RoomMemberRepository['findByRoomIds']>();
   const updateRole = vi.fn<RoomMemberRepository['updateRole']>();
   const deleteByRoomAndUser = vi.fn<RoomMemberRepository['deleteByRoomAndUser']>();
   const deleteByRoomId = vi.fn<RoomMemberRepository['deleteByRoomId']>();
@@ -62,6 +63,7 @@ describe('RoomsService', () => {
   const updateReadState = vi.fn<RoomMemberRepository['updateReadState']>();
 
   const findUserById = vi.fn<UserRepository['findById']>();
+  const findUsersByIds = vi.fn<UserRepository['findByIds']>();
   const findMessageById = vi.fn<MessageRepository['findById']>();
 
   const rooms: RoomRepository = {
@@ -79,6 +81,7 @@ describe('RoomsService', () => {
     findByRoomAndUser,
     findByRoomId,
     findByUserId,
+    findByRoomIds,
     updateRole,
     deleteByRoomAndUser,
     deleteByRoomId,
@@ -91,7 +94,8 @@ describe('RoomsService', () => {
     findByEmail: vi.fn(),
     findByUsername: vi.fn(),
     findByUsernames: vi.fn(),
-    findByIds: vi.fn(),
+    findByIds: findUsersByIds,
+    searchByQuery: vi.fn(),
     create: vi.fn(),
     updateProfile: vi.fn(),
     updateLastSeenAt: vi.fn(),
@@ -119,6 +123,7 @@ describe('RoomsService', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    findUsersByIds.mockResolvedValue([]);
   });
 
   it('hides private rooms from users who are not members', async () => {
@@ -143,6 +148,54 @@ describe('RoomsService', () => {
     const listed = await service.listRooms(MEMBER_ID);
 
     expect(listed.map((item) => item.id).sort()).toEqual([ROOM_ID, privateRoom.id].sort());
+  });
+
+  it('includes the peer user id when listing direct rooms', async () => {
+    const directRoom = room({
+      id: '507f1f77bcf86cd799439023',
+      name: undefined,
+      type: ROOM_TYPES.DIRECT,
+      ownerId: undefined,
+    });
+    findByUserId.mockResolvedValue([
+      member({ roomId: directRoom.id, userId: OWNER_ID, role: MEMBERSHIP_ROLES.MEMBER }),
+    ]);
+    findPublic.mockResolvedValue([]);
+    findRoomsByIds.mockResolvedValue([directRoom]);
+    findByRoomIds.mockResolvedValue([
+      member({
+        roomId: directRoom.id,
+        userId: OWNER_ID,
+        role: MEMBERSHIP_ROLES.MEMBER,
+      }),
+      member({
+        id: '507f1f77bcf86cd799439032',
+        roomId: directRoom.id,
+        userId: PEER_ID,
+        role: MEMBERSHIP_ROLES.MEMBER,
+      }),
+    ]);
+    findUsersByIds.mockResolvedValue([
+      {
+        id: PEER_ID,
+        username: 'bob',
+        email: 'bob@example.com',
+        displayName: 'Bob Builder',
+        role: 'USER',
+        createdAt: new Date('2026-01-01T00:00:00.000Z'),
+        updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+      },
+    ]);
+
+    await expect(service.listRooms(OWNER_ID)).resolves.toEqual([
+      expect.objectContaining({
+        id: directRoom.id,
+        type: ROOM_TYPES.DIRECT,
+        peerUserId: PEER_ID,
+        peerUsername: 'bob',
+        peerDisplayName: 'Bob Builder',
+      }),
+    ]);
   });
 
   it('creates a public room with the creator as owner', async () => {
@@ -244,7 +297,12 @@ describe('RoomsService', () => {
 
     await expect(
       service.createRoom(OWNER_ID, { type: ROOM_TYPES.DIRECT, peerUserId: PEER_ID }),
-    ).resolves.toMatchObject({ type: ROOM_TYPES.DIRECT });
+    ).resolves.toMatchObject({
+      type: ROOM_TYPES.DIRECT,
+      peerUserId: PEER_ID,
+      peerUsername: 'peer',
+      peerDisplayName: 'Peer',
+    });
 
     expect(createMember).toHaveBeenCalledTimes(2);
     expect(createMember).toHaveBeenCalledWith({

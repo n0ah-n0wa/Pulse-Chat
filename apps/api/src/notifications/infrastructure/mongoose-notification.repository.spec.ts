@@ -17,6 +17,7 @@ const USER_A = '507f1f77bcf86cd799439011';
 const USER_B = '507f1f77bcf86cd799439012';
 const ACTOR = '507f1f77bcf86cd799439021';
 const REF = '507f1f77bcf86cd799439031';
+const ROOM = '507f1f77bcf86cd799439041';
 
 describe('MongooseNotificationRepository', () => {
   let repository: NotificationRepository;
@@ -62,12 +63,14 @@ describe('MongooseNotificationRepository', () => {
       userId: USER_A,
       type: NOTIFICATION_TYPES.MENTION,
       referenceId: REF,
+      roomId: ROOM,
       actorId: ACTOR,
     });
 
     expect(created).toBe(true);
     expect(record.userId).toBe(USER_A);
     expect(record.type).toBe(NOTIFICATION_TYPES.MENTION);
+    expect(record.roomId).toBe(ROOM);
     expect(record.isRead).toBe(false);
   });
 
@@ -76,6 +79,7 @@ describe('MongooseNotificationRepository', () => {
       userId: USER_A,
       type: NOTIFICATION_TYPES.REPLY,
       referenceId: REF,
+      roomId: ROOM,
       actorId: ACTOR,
     };
 
@@ -92,12 +96,14 @@ describe('MongooseNotificationRepository', () => {
       userId: USER_A,
       type: NOTIFICATION_TYPES.MENTION,
       referenceId: REF,
+      roomId: ROOM,
       actorId: ACTOR,
     });
     await repository.findOrCreate({
       userId: USER_B,
       type: NOTIFICATION_TYPES.MENTION,
       referenceId: REF,
+      roomId: ROOM,
       actorId: ACTOR,
     });
 
@@ -108,9 +114,27 @@ describe('MongooseNotificationRepository', () => {
 
   it('pages with cursor correctly (newest-first)', async () => {
     const inputs = [
-      { userId: USER_A, type: NOTIFICATION_TYPES.MENTION, referenceId: REF, actorId: ACTOR },
-      { userId: USER_A, type: NOTIFICATION_TYPES.REPLY, referenceId: REF, actorId: ACTOR },
-      { userId: USER_A, type: NOTIFICATION_TYPES.DIRECT_MESSAGE, referenceId: REF, actorId: ACTOR },
+      {
+        userId: USER_A,
+        type: NOTIFICATION_TYPES.MENTION,
+        referenceId: REF,
+        roomId: ROOM,
+        actorId: ACTOR,
+      },
+      {
+        userId: USER_A,
+        type: NOTIFICATION_TYPES.REPLY,
+        referenceId: REF,
+        roomId: ROOM,
+        actorId: ACTOR,
+      },
+      {
+        userId: USER_A,
+        type: NOTIFICATION_TYPES.DIRECT_MESSAGE,
+        referenceId: REF,
+        roomId: ROOM,
+        actorId: ACTOR,
+      },
     ] as const;
 
     for (const input of inputs) {
@@ -134,6 +158,7 @@ describe('MongooseNotificationRepository', () => {
       userId: USER_A,
       type: NOTIFICATION_TYPES.MENTION,
       referenceId: REF,
+      roomId: ROOM,
       actorId: ACTOR,
     });
 
@@ -152,6 +177,7 @@ describe('MongooseNotificationRepository', () => {
         userId: USER_A,
         type: NOTIFICATION_TYPES.MENTION,
         referenceId: ref,
+        roomId: ROOM,
         actorId: ACTOR,
       });
     }

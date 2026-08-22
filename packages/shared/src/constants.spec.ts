@@ -2,6 +2,9 @@ import { describe, expect, it } from 'vitest';
 
 import {
   ATTACHMENT_MAX_BYTES,
+  DIRECTORY_SEARCH_LIMIT_DEFAULT,
+  DIRECTORY_SEARCH_LIMIT_MAX,
+  DIRECTORY_SEARCH_QUERY_MAX_LENGTH,
   MESSAGE_MAX_ATTACHMENTS,
   MESSAGE_MAX_LENGTH,
   MESSAGE_PAGE_SIZE_DEFAULT,
@@ -19,6 +22,10 @@ describe('shared constants', () => {
     expect(USERNAME_MAX_LENGTH).toBe(32);
     expect(ATTACHMENT_MAX_BYTES).toBe(10 * 1024 * 1024);
     expect(MESSAGE_MAX_ATTACHMENTS).toBe(10);
+    expect(DIRECTORY_SEARCH_QUERY_MAX_LENGTH).toBe(64);
+    expect(DIRECTORY_SEARCH_LIMIT_DEFAULT).toBe(20);
+    expect(DIRECTORY_SEARCH_LIMIT_MAX).toBe(50);
+    expect(DIRECTORY_SEARCH_LIMIT_DEFAULT).toBeLessThanOrEqual(DIRECTORY_SEARCH_LIMIT_MAX);
   });
 
   it('never lets a client request more history than the maximum page size', () => {

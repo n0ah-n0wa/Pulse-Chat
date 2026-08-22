@@ -1,7 +1,10 @@
 import type { RoomMemberResponse, RoomResponse } from '@pulse-chat/shared';
 
+import type { UserRecord } from '../users/user.repository.interface.js';
 import type { RoomMemberRecord } from './room-member.repository.interface.js';
 import type { RoomRecord } from './room.repository.interface.js';
+
+export type RoomPeerPreview = Pick<UserRecord, 'username' | 'displayName'>;
 
 function toIsoString(value: Date | undefined): string | undefined {
   return value?.toISOString();
@@ -11,7 +14,12 @@ function toIsoString(value: Date | undefined): string | undefined {
 export function toRoomResponse(
   room: RoomRecord,
   membership?: Pick<RoomMemberRecord, 'role' | 'lastReadMessageId' | 'lastReadAt'>,
+  peerUserId?: string,
+  peer?: RoomPeerPreview,
 ): RoomResponse {
+  const peerUsername = peer?.username?.trim();
+  const peerDisplayName = peer?.displayName?.trim();
+
   return {
     id: room.id,
     ...(room.name !== undefined && room.name.length > 0 ? { name: room.name } : {}),
@@ -20,6 +28,9 @@ export function toRoomResponse(
       : {}),
     type: room.type,
     ...(room.ownerId !== undefined ? { ownerId: room.ownerId } : {}),
+    ...(peerUserId !== undefined ? { peerUserId } : {}),
+    ...(peerUsername !== undefined && peerUsername.length > 0 ? { peerUsername } : {}),
+    ...(peerDisplayName !== undefined && peerDisplayName.length > 0 ? { peerDisplayName } : {}),
     createdAt: room.createdAt.toISOString(),
     updatedAt: room.updatedAt.toISOString(),
     ...(membership?.role !== undefined ? { currentUserRole: membership.role } : {}),

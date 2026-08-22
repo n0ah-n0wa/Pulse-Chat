@@ -106,6 +106,7 @@ describe('Notifications API', () => {
       expect(items[0]).toMatchObject({
         type: NOTIFICATION_TYPES.MENTION,
         actorId: author.userId,
+        roomId,
         isRead: false,
       });
     } finally {
@@ -189,6 +190,7 @@ describe('Notifications API', () => {
         type: NOTIFICATION_TYPES.REPLY,
         actorId: replier.userId,
         referenceId: expect.any(String) as string,
+        roomId,
         isRead: false,
       });
     } finally {
@@ -308,6 +310,7 @@ describe('Notifications API', () => {
       expect(items[0]).toMatchObject({
         type: NOTIFICATION_TYPES.DIRECT_MESSAGE,
         actorId: userA.userId,
+        roomId,
         isRead: false,
       });
     } finally {
@@ -344,6 +347,7 @@ describe('Notifications API', () => {
       type: NOTIFICATION_TYPES.ROOM_INVITATION,
       actorId: owner.userId,
       referenceId: roomId,
+      roomId,
       isRead: false,
     });
   });
@@ -504,6 +508,7 @@ describe('Notifications API', () => {
         userId: receiver.userId,
         type: NOTIFICATION_TYPES.MENTION,
         actorId: author.userId,
+        roomId,
         isRead: false,
       });
     } finally {

@@ -1,6 +1,7 @@
 import { Link, useParams } from 'react-router-dom';
 
 import { useAuth } from '../hooks/useAuth';
+import { useOpenDirectRoom } from '../hooks/useRoomMutations';
 import { usePublicProfileByUsername } from '../hooks/usePublicProfileQuery';
 import { formatLastSeen } from '../lib/presence-display';
 import { toDisplayErrorMessage } from '../lib/errors';
@@ -10,6 +11,7 @@ export function ProfilePage() {
   const { username } = useParams<{ username: string }>();
   const { user: currentUser } = useAuth();
   const profileQuery = usePublicProfileByUsername(username);
+  const openDirectRoom = useOpenDirectRoom();
 
   if (profileQuery.isPending) {
     return (
@@ -71,6 +73,24 @@ export function ProfilePage() {
             >
               Edit profile
             </Link>
+          ) : currentUser !== null ? (
+            <div className="mt-6 flex flex-wrap gap-2">
+              <button
+                type="button"
+                disabled={openDirectRoom.isPending}
+                onClick={() => {
+                  openDirectRoom.mutate(profile.id);
+                }}
+                className="inline-flex rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-60 dark:bg-slate-100 dark:text-slate-900"
+              >
+                {openDirectRoom.isPending ? 'Opening…' : 'Message'}
+              </button>
+              {openDirectRoom.error !== null && openDirectRoom.error !== undefined ? (
+                <p role="alert" className="w-full text-sm text-rose-700 dark:text-rose-400">
+                  {toDisplayErrorMessage(openDirectRoom.error, 'Unable to start a conversation.')}
+                </p>
+              ) : null}
+            </div>
           ) : null}
         </div>
       </div>

@@ -7,6 +7,7 @@ import {
   Param,
   Patch,
   Post,
+  Query,
   Res,
   UploadedFile,
   UseGuards,
@@ -19,9 +20,11 @@ import type { Response } from 'express';
 import {
   ATTACHMENT_MAX_BYTES,
   API_ERROR_CODES,
+  searchUsersQuerySchema,
   updateUserProfileSchema,
   type CurrentUserProfile,
   type PublicUserProfile,
+  type SearchUsersQuery,
   type UpdateUserProfileInput,
 } from '@pulse-chat/shared';
 
@@ -44,6 +47,18 @@ const avatarUploadInterceptor = FileInterceptor('file', {
 @Controller('users')
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
+
+  @Get('search')
+  @UseGuards(AuthGuard, UserRateLimitGuard)
+  @RateLimited(RATE_LIMIT_ACTIONS.SEARCH)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Search users by username or display name' })
+  searchUsers(
+    @CurrentUser() currentUser: AuthenticatedUser,
+    @Query(new ZodValidationPipe(searchUsersQuerySchema)) query: SearchUsersQuery,
+  ): Promise<PublicUserProfile[]> {
+    return this.usersService.searchPublicProfiles(currentUser.userId, query);
+  }
 
   @Get('username/:username')
   @ApiOperation({ summary: 'Get a public user profile by username' })

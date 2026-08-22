@@ -14,7 +14,8 @@ FROM node:${NODE_VERSION}-bookworm-slim AS development
 ENV PNPM_HOME=/pnpm \
     PATH=/pnpm:$PATH \
     COREPACK_ENABLE_DOWNLOAD_PROMPT=0 \
-    NODE_ENV=development
+    NODE_ENV=development \
+    MONGOMS_DISABLE_POSTINSTALL=1
 
 # Optional roots for networks that intercept TLS; see certs/README.md. The
 # directory holds only documentation unless a developer adds their own. The slim
@@ -35,6 +36,7 @@ WORKDIR /app
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY apps/api/package.json ./apps/api/
 COPY apps/web/package.json ./apps/web/
+COPY e2e/package.json ./e2e/
 COPY packages/config/package.json ./packages/config/
 COPY packages/eslint-config/package.json ./packages/eslint-config/
 COPY packages/shared/package.json ./packages/shared/

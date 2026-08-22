@@ -7,6 +7,7 @@ const notification = {
   userId: '507f1f77bcf86cd799439011',
   type: 'mention' as const,
   referenceId: '507f1f77bcf86cd799439041',
+  roomId: '507f1f77bcf86cd799439021',
   actorId: '507f1f77bcf86cd799439012',
   isRead: false,
   createdAt: '2026-08-18T00:00:00.000Z',

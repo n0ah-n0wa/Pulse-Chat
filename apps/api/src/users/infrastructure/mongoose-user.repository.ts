@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model, Types } from 'mongoose';
+import { Model, Types, type FilterQuery } from 'mongoose';
 
 import { USER_ROLES, type CreateUserInput } from '@pulse-chat/shared';
 
@@ -9,8 +9,10 @@ import type {
   UpdateUserProfileData,
   UserRecord,
   UserRepository,
+  UserSearchQuery,
 } from '../user.repository.interface.js';
 import { USER_REPOSITORY } from '../users.tokens.js';
+import { escapeRegExp } from '../utils/escape-regexp.js';
 import { UserDocument } from './user.schema.js';
 
 function toUserRecord(
@@ -92,6 +94,31 @@ export class MongooseUserRepository implements UserRepository {
       .find({ _id: { $in: validIds } })
       .lean()
       .exec();
+    return documents.map((document) => toUserRecord(document));
+  }
+
+  async searchByQuery(query: UserSearchQuery): Promise<UserRecord[]> {
+    const pattern = escapeRegExp(query.text.trim());
+    if (pattern.length === 0 || query.limit <= 0) {
+      return [];
+    }
+
+    const nameMatch = { $regex: pattern, $options: 'i' };
+    const filter: FilterQuery<UserDocument> = {
+      $or: [{ username: nameMatch }, { displayName: nameMatch }],
+    };
+
+    if (query.excludeUserId !== undefined && isValidObjectId(query.excludeUserId)) {
+      filter._id = { $ne: new Types.ObjectId(query.excludeUserId) };
+    }
+
+    const documents = await this.userModel
+      .find(filter)
+      .sort({ username: 1 })
+      .limit(query.limit)
+      .lean()
+      .exec();
+
     return documents.map((document) => toUserRecord(document));
   }
 

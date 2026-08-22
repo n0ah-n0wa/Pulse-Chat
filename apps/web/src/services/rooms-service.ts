@@ -1,4 +1,5 @@
 import type {
+  AddRoomMemberInput,
   CreateRoomInput,
   MarkRoomReadInput,
   RoomMemberResponse,
@@ -26,6 +27,10 @@ export const roomsService = {
 
   listMembers(roomId: string): Promise<RoomMemberResponse[]> {
     return apiClient.get<RoomMemberResponse[]>(`/api/rooms/${roomId}/members`);
+  },
+
+  addMember(roomId: string, input: AddRoomMemberInput): Promise<RoomMemberResponse> {
+    return apiClient.post<RoomMemberResponse>(`/api/rooms/${roomId}/members`, input);
   },
 
   markRead(roomId: string, input: MarkRoomReadInput): Promise<RoomMemberResponse> {

@@ -46,7 +46,10 @@ development just as it will in production. Cookies and CORS therefore
 behave the same in both environments. The `/api` prefix is passed through
 unchanged, leaving the prefix owned by the backend. Upgrade headers are
 set for every location, because both Socket.IO and the Vite hot-reload
-channel are WebSockets.
+channel are WebSockets. Vite also proxies `/api` and `/socket.io` to the
+API (`http://api:3000` in Compose), so opening the published `:5173` port
+does not 404 REST calls — but `http://localhost:8080` remains the
+supported origin.
 
 **Nginx resolves upstreams per request** using Docker's embedded DNS at
 127.0.0.11. Without this, nginx caches an address at startup and keeps
@@ -107,9 +110,12 @@ described in `docs/observability.md`.
 
 - **Backend hot reload does not work on Windows or macOS hosts.**
   `node --watch` relies on filesystem events, and those do not cross a
-  Docker Desktop bind mount. The frontend and the shared package poll
-  instead, which their watchers support. On Windows, running the API on
-  the host against containerised data stores gives a faster loop:
+  Docker Desktop bind mount. Compose therefore **compiles the API once
+  and runs `dist`** instead of `@swc-node/register`. Edits to API source
+  need a container restart (`docker compose restart api`) to show up.
+  The frontend and the shared package poll, which their watchers support.
+  On Windows, a faster API loop is still the host process against
+  containerised data stores:
   `docker compose up -d mongodb redis && pnpm dev`.
 - **Bind-mounted files are written by root** in the container. Harmless
   on Docker Desktop; on a native Linux host, expect root-owned build

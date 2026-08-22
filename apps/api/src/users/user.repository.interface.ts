@@ -22,6 +22,12 @@ export interface UpdateUserProfileData {
   readonly avatarUrl?: string;
 }
 
+export interface UserSearchQuery {
+  readonly text: string;
+  readonly limit: number;
+  readonly excludeUserId?: string;
+}
+
 /** Data-access contract for user persistence. */
 export interface UserRepository {
   findById(id: string): Promise<UserRecord | null>;
@@ -29,6 +35,7 @@ export interface UserRepository {
   findByUsername(username: string): Promise<UserRecord | null>;
   findByUsernames(usernames: readonly string[]): Promise<UserRecord[]>;
   findByIds(ids: readonly string[]): Promise<UserRecord[]>;
+  searchByQuery(query: UserSearchQuery): Promise<UserRecord[]>;
   create(input: CreateUserInput): Promise<UserRecord>;
   updateProfile(id: string, update: UpdateUserProfileData): Promise<UserRecord | null>;
   updateLastSeenAt(id: string, lastSeenAt: Date): Promise<UserRecord | null>;

@@ -21,6 +21,15 @@ export const MESSAGE_PAGE_SIZE_MAX = 100;
 /** Maximum length of a room message search query, in characters (section 19). */
 export const MESSAGE_SEARCH_QUERY_MAX_LENGTH = 200;
 
+/** Maximum length of a user or room directory search query. */
+export const DIRECTORY_SEARCH_QUERY_MAX_LENGTH = 64;
+
+/** Default page size for directory search (users). */
+export const DIRECTORY_SEARCH_LIMIT_DEFAULT = 20;
+
+/** Largest page size a client may request for directory search. */
+export const DIRECTORY_SEARCH_LIMIT_MAX = 50;
+
 /** Maximum attachments a single message may reference (section 18). */
 export const MESSAGE_MAX_ATTACHMENTS = 10;
 

@@ -299,10 +299,28 @@ describe('RoomsController', () => {
     expect(created.body).toMatchObject({
       type: ROOM_TYPES.DIRECT,
       currentUserRole: MEMBERSHIP_ROLES.MEMBER,
+      peerUserId: bob.userId,
+      peerUsername: 'dm_bob',
     });
     expect(created.body).not.toHaveProperty('ownerId');
 
     const roomId = createdRoomId(created.body);
+
+    const listed = await request(httpServer)
+      .get('/api/rooms')
+      .set(bearerAuthorization(alice.accessToken))
+      .expect(200);
+
+    expect(listed.body as { id: string; peerUserId?: string }[]).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: roomId,
+          peerUserId: bob.userId,
+          peerUsername: 'dm_bob',
+          type: ROOM_TYPES.DIRECT,
+        }),
+      ]),
+    );
 
     await request(httpServer)
       .post('/api/rooms')

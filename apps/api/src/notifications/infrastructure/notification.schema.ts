@@ -17,6 +17,9 @@ export class NotificationDocument {
   @Prop({ required: true, type: Types.ObjectId })
   referenceId!: Types.ObjectId;
 
+  @Prop({ type: Types.ObjectId, ref: 'RoomDocument', index: true })
+  roomId?: Types.ObjectId;
+
   @Prop({ required: true, type: Types.ObjectId, ref: 'UserDocument' })
   actorId!: Types.ObjectId;
 

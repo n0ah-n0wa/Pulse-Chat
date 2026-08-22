@@ -23,3 +23,18 @@ export function notificationSummary(notification: NotificationResponse): string 
     minute: '2-digit',
   }).format(new Date(notification.createdAt))}`;
 }
+
+/** Path to the room or conversation this notification refers to. */
+export function notificationRoomPath(notification: NotificationResponse): string | undefined {
+  const roomId =
+    notification.roomId ??
+    (notification.type === NOTIFICATION_TYPES.ROOM_INVITATION
+      ? notification.referenceId
+      : undefined);
+
+  if (roomId === undefined || roomId.length === 0) {
+    return undefined;
+  }
+
+  return `/app/rooms/${roomId}`;
+}

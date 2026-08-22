@@ -410,19 +410,34 @@ export class MessagesService {
         mentionedIds
           .filter((recipientId) => memberIds.has(recipientId))
           .map((recipientId) =>
-            this.notificationsService.notifyMention(authorId, recipientId, message.id),
+            this.notificationsService.notifyMention(
+              authorId,
+              recipientId,
+              message.id,
+              message.roomId,
+            ),
           ),
       );
 
       if (replyTarget !== undefined && memberIds.has(replyTarget.authorId)) {
-        await this.notificationsService.notifyReply(authorId, replyTarget.authorId, message.id);
+        await this.notificationsService.notifyReply(
+          authorId,
+          replyTarget.authorId,
+          message.id,
+          message.roomId,
+        );
       }
 
       // Direct-message notification to the other party.
       if (roomType === ROOM_TYPES.DIRECT) {
         const peerId = await this.roomsService.getDirectRoomPeer(message.roomId, authorId);
         if (peerId !== undefined) {
-          await this.notificationsService.notifyDirectMessage(authorId, peerId, message.id);
+          await this.notificationsService.notifyDirectMessage(
+            authorId,
+            peerId,
+            message.id,
+            message.roomId,
+          );
         }
       }
     } catch (error: unknown) {

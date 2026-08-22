@@ -1,7 +1,13 @@
+import { Link } from 'react-router-dom';
+
 import { useSocketConnectionState } from '../../hooks/useSocketConnectionState';
 import { useNotificationMutations, useNotificationsQuery } from '../../hooks/useNotificationsQuery';
 import { toDisplayErrorMessage } from '../../lib/errors';
-import { notificationSummary, notificationTypeLabel } from '../../lib/notification-display';
+import {
+  notificationRoomPath,
+  notificationSummary,
+  notificationTypeLabel,
+} from '../../lib/notification-display';
 import { NotificationBadge } from './NotificationBadge';
 
 interface NotificationCenterProps {
@@ -85,39 +91,67 @@ export function NotificationCenter({ onClose }: NotificationCenterProps) {
       ) : null}
 
       <ul className="min-h-0 flex-1 overflow-y-auto" aria-label="Notifications">
-        {items.map((notification) => (
-          <li
-            key={notification.id}
-            className={
-              notification.isRead
-                ? 'border-b border-slate-100 px-4 py-3 dark:border-slate-800'
-                : 'border-b border-slate-100 bg-slate-50 px-4 py-3 dark:border-slate-800 dark:bg-slate-900/60'
-            }
-          >
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <p className="text-sm font-medium text-slate-900 dark:text-slate-50">
-                  {notificationTypeLabel(notification.type)}
-                </p>
-                <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
-                  {notificationSummary(notification)}
-                </p>
+        {items.map((notification) => {
+          const roomPath = notificationRoomPath(notification);
+          const title = notificationTypeLabel(notification.type);
+          const summary = notificationSummary(notification);
+
+          return (
+            <li
+              key={notification.id}
+              className={
+                notification.isRead
+                  ? 'border-b border-slate-100 px-4 py-3 dark:border-slate-800'
+                  : 'border-b border-slate-100 bg-slate-50 px-4 py-3 dark:border-slate-800 dark:bg-slate-900/60'
+              }
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  {roomPath === undefined ? (
+                    <>
+                      <p className="text-sm font-medium text-slate-900 dark:text-slate-50">
+                        {title}
+                      </p>
+                      <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">{summary}</p>
+                    </>
+                  ) : (
+                    <Link
+                      to={roomPath}
+                      aria-label={`Open ${title.toLowerCase()}`}
+                      onClick={() => {
+                        if (!notification.isRead) {
+                          markRead.mutate(notification.id);
+                        }
+                        onClose();
+                      }}
+                      className="block min-w-0 rounded-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-500"
+                    >
+                      <p className="text-sm font-medium text-slate-900 underline-offset-2 hover:underline dark:text-slate-50">
+                        {title}
+                      </p>
+                      <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">{summary}</p>
+                      <p className="mt-1 text-xs font-medium text-slate-600 dark:text-slate-300">
+                        Open conversation
+                      </p>
+                    </Link>
+                  )}
+                </div>
+                {!notification.isRead ? (
+                  <button
+                    type="button"
+                    disabled={markRead.isPending}
+                    onClick={() => {
+                      markRead.mutate(notification.id);
+                    }}
+                    className="shrink-0 text-xs font-medium text-slate-600 hover:text-slate-900 dark:text-slate-300 dark:hover:text-slate-50"
+                  >
+                    Mark read
+                  </button>
+                ) : null}
               </div>
-              {!notification.isRead ? (
-                <button
-                  type="button"
-                  disabled={markRead.isPending}
-                  onClick={() => {
-                    markRead.mutate(notification.id);
-                  }}
-                  className="shrink-0 text-xs font-medium text-slate-600 hover:text-slate-900 dark:text-slate-300 dark:hover:text-slate-50"
-                >
-                  Mark read
-                </button>
-              ) : null}
-            </div>
-          </li>
-        ))}
+            </li>
+          );
+        })}
       </ul>
     </div>
   );

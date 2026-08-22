@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from 'react';
 
-import type { MessageResponse } from '@pulse-chat/shared';
+import { ROOM_TYPES, type MessageResponse } from '@pulse-chat/shared';
 
 import { useAuth } from '../../hooks/useAuth';
 import { useAuthorProfiles } from '../../hooks/useAuthorProfiles';
@@ -19,6 +19,7 @@ import { useSocketConnectionState } from '../../hooks/useSocketConnectionState';
 import { toDisplayErrorMessage } from '../../lib/errors';
 import { createClientMessageId } from '../../lib/message-utils';
 import { roomDisplayName, roomTypeLabel } from '../../lib/room-display';
+import { AvatarImage } from '../account/AvatarImage';
 import { ConnectionBanner } from './ConnectionBanner';
 import { MessageComposer } from './MessageComposer';
 import { MessageList } from './MessageList';
@@ -106,8 +107,14 @@ export function ChatPane({ roomId }: ChatPaneProps) {
     if (replyTo !== null) {
       ids.push(replyTo.authorId);
     }
+    if (roomQuery.data?.peerUserId !== undefined) {
+      ids.push(roomQuery.data.peerUserId);
+    }
+    if (user?.id !== undefined) {
+      ids.push(user.id);
+    }
     return ids;
-  }, [messages, replyTo, typingUserIds]);
+  }, [messages, replyTo, roomQuery.data, typingUserIds, user?.id]);
 
   const authors = useAuthorProfiles(authorIds);
 
@@ -160,22 +167,34 @@ export function ChatPane({ roomId }: ChatPaneProps) {
   }
 
   const room = roomQuery.data;
+  const peer = room.peerUserId !== undefined ? authors.get(room.peerUserId) : undefined;
 
   return (
     <section className="flex h-full min-h-0 flex-col" aria-labelledby="chat-room-heading">
       <header className="border-b border-slate-200 px-4 py-3 dark:border-slate-800">
-        <h1
-          id="chat-room-heading"
-          className="text-lg font-semibold text-slate-900 dark:text-slate-50"
-        >
-          {roomDisplayName(room)}
-        </h1>
-        <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-          {roomTypeLabel(room)}
-          {room.description !== undefined && room.description.length > 0
-            ? ` · ${room.description}`
-            : ''}
-        </p>
+        <div className="flex items-center gap-3">
+          {room.type === ROOM_TYPES.DIRECT ? (
+            <AvatarImage
+              displayName={roomDisplayName(room, peer)}
+              avatarUrl={peer?.avatarUrl}
+              size="sm"
+            />
+          ) : null}
+          <div className="min-w-0">
+            <h1
+              id="chat-room-heading"
+              className="text-lg font-semibold text-slate-900 dark:text-slate-50"
+            >
+              {roomDisplayName(room, peer)}
+            </h1>
+            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+              {roomTypeLabel(room)}
+              {room.description !== undefined && room.description.length > 0
+                ? ` · ${room.description}`
+                : ''}
+            </p>
+          </div>
+        </div>
       </header>
 
       <ConnectionBanner connectionState={connectionState} />

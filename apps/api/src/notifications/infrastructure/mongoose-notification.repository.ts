@@ -19,6 +19,7 @@ function toNotificationRecord(document: {
   readonly userId: Types.ObjectId;
   readonly type: NotificationRecord['type'];
   readonly referenceId: Types.ObjectId;
+  readonly roomId?: Types.ObjectId;
   readonly actorId: Types.ObjectId;
   readonly isRead: boolean;
   readonly createdAt: Date;
@@ -29,6 +30,7 @@ function toNotificationRecord(document: {
     userId: document.userId.toHexString(),
     type: document.type,
     referenceId: document.referenceId.toHexString(),
+    ...(document.roomId != null ? { roomId: document.roomId.toHexString() } : {}),
     actorId: document.actorId.toHexString(),
     isRead: document.isRead,
     createdAt: document.createdAt,
@@ -61,6 +63,7 @@ export class MongooseNotificationRepository implements NotificationRepository {
     try {
       const created = await this.model.create({
         ...filter,
+        roomId: new Types.ObjectId(input.roomId),
         isRead: false,
       });
       return { record: toNotificationRecord(created), created: true };

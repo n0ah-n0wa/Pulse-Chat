@@ -1,11 +1,26 @@
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import type { ReactElement } from 'react';
+import { MemoryRouter } from 'react-router-dom';
 import { describe, expect, it, vi } from 'vitest';
 
 import type { MessageResponse } from '@pulse-chat/shared';
 import { MESSAGE_MAX_LENGTH } from '@pulse-chat/shared';
 
 import { MessageItem } from './MessageItem';
+
+function renderMessage(ui: ReactElement) {
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+  });
+
+  return render(
+    <QueryClientProvider client={queryClient}>
+      <MemoryRouter>{ui}</MemoryRouter>
+    </QueryClientProvider>,
+  );
+}
 
 function message(overrides: Partial<MessageResponse> = {}): MessageResponse {
   return {
@@ -34,6 +49,7 @@ describe('MessageItem', () => {
           id: '507f1f77bcf86cd799439011',
           username: 'alice',
           displayName: 'Alice',
+          avatarUrl: '/api/users/507f1f77bcf86cd799439011/avatar',
           role: 'USER' as const,
           createdAt: '2026-08-18T00:00:00.000Z',
         },
@@ -50,7 +66,7 @@ describe('MessageItem', () => {
       ],
     ]);
 
-    render(
+    renderMessage(
       <MessageItem
         message={message({
           editedAt: '2026-08-18T12:31:00.000Z',
@@ -82,7 +98,17 @@ describe('MessageItem', () => {
     );
 
     expect(screen.getByText('Alice')).toBeInTheDocument();
+    expect(screen.getByRole('img', { name: 'Alice avatar' })).toHaveAttribute(
+      'src',
+      '/api/users/507f1f77bcf86cd799439011/avatar',
+    );
     expect(screen.getByText('Hello world')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Alice' }));
+    expect(screen.getByRole('menuitem', { name: 'View profile' })).toHaveAttribute(
+      'href',
+      '/profile/alice',
+    );
     expect(screen.getByText('(edited)')).toBeInTheDocument();
     expect(screen.getByText('Earlier note')).toBeInTheDocument();
     expect(screen.getByText(/notes\.pdf/)).toBeInTheDocument();
@@ -95,7 +121,7 @@ describe('MessageItem', () => {
   });
 
   it('renders deleted messages without content actions', () => {
-    render(
+    renderMessage(
       <MessageItem
         message={message({
           content: '',
@@ -121,7 +147,7 @@ describe('MessageItem', () => {
     const onEdit = vi.fn();
     const onDelete = vi.fn();
 
-    render(
+    renderMessage(
       <MessageItem
         message={message({ reactions: [] })}
         currentUserId="507f1f77bcf86cd799439011"
@@ -149,7 +175,7 @@ describe('MessageItem', () => {
   it('renders untrusted message HTML as text and caps the edit field', async () => {
     const user = userEvent.setup();
 
-    const { container } = render(
+    const { container } = renderMessage(
       <MessageItem
         message={message({
           content: '<script>alert(1)</script>',

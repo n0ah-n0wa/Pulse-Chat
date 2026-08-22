@@ -7,6 +7,11 @@ import type {
 import { apiClient, apiRequest } from './api-client';
 
 export const usersService = {
+  search(query: string): Promise<PublicUserProfile[]> {
+    const params = new URLSearchParams({ q: query });
+    return apiClient.get<PublicUserProfile[]>(`/api/users/search?${params.toString()}`);
+  },
+
   getPublicProfile(userId: string): Promise<PublicUserProfile> {
     return apiClient.get<PublicUserProfile>(`/api/users/${userId}`);
   },

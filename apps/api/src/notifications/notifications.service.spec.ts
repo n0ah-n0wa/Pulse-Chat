@@ -12,6 +12,7 @@ import { NotificationsService } from './notifications.service.js';
 const USER_ID = '507f1f77bcf86cd799439011';
 const ACTOR_ID = '507f1f77bcf86cd799439012';
 const REF_ID = '507f1f77bcf86cd799439021';
+const ROOM_ID = '507f1f77bcf86cd799439041';
 const NOTIF_ID = '507f1f77bcf86cd799439031';
 
 function notifRecord(overrides: Partial<NotificationRecord> = {}): NotificationRecord {
@@ -20,6 +21,7 @@ function notifRecord(overrides: Partial<NotificationRecord> = {}): NotificationR
     userId: USER_ID,
     type: NOTIFICATION_TYPES.MENTION,
     referenceId: REF_ID,
+    roomId: ROOM_ID,
     actorId: ACTOR_ID,
     isRead: false,
     createdAt: new Date('2026-08-19T10:00:00.000Z'),
@@ -64,6 +66,7 @@ describe('NotificationsService', () => {
       userId: USER_ID,
       type: NOTIFICATION_TYPES.MENTION,
       referenceId: REF_ID,
+      roomId: ROOM_ID,
       actorId: ACTOR_ID,
     });
 
@@ -82,6 +85,7 @@ describe('NotificationsService', () => {
       userId: USER_ID,
       type: NOTIFICATION_TYPES.MENTION,
       referenceId: REF_ID,
+      roomId: ROOM_ID,
       actorId: ACTOR_ID,
     });
 
@@ -176,12 +180,12 @@ describe('NotificationsService', () => {
   // ---------------------------------------------------------------------------
 
   it('does not notify when actor and recipient are the same', async () => {
-    await service.notifyMention(USER_ID, USER_ID, REF_ID);
+    await service.notifyMention(USER_ID, USER_ID, REF_ID, ROOM_ID);
     expect(findOrCreate).not.toHaveBeenCalled();
   });
 
   it('does not send a reply notification when replying to oneself', async () => {
-    await service.notifyReply(USER_ID, USER_ID, REF_ID);
+    await service.notifyReply(USER_ID, USER_ID, REF_ID, ROOM_ID);
     expect(findOrCreate).not.toHaveBeenCalled();
   });
 });

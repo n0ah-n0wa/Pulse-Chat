@@ -7,7 +7,8 @@ import { defineConfig } from 'vitest/config';
 // mount from the host, so the watcher polls instead.
 const inContainer = process.env['PULSE_DEV_CONTAINER'] === 'true';
 
-const apiOrigin = process.env['PULSE_API_ORIGIN'] ?? 'http://127.0.0.1:3000';
+const apiOrigin =
+  process.env['PULSE_API_ORIGIN'] ?? (inContainer ? 'http://api:3000' : 'http://127.0.0.1:3000');
 
 export default defineConfig({
   plugins: [react(), tailwindcss()],
@@ -16,14 +17,13 @@ export default defineConfig({
     port: 5173,
     strictPort: true,
     watch: inContainer ? { usePolling: true, interval: 400 } : undefined,
-    // When Vite runs without the nginx dev proxy, forward API and Socket.IO to
-    // the backend so relative /api and /socket.io URLs keep working.
-    proxy: inContainer
-      ? undefined
-      : {
-          '/api': { target: apiOrigin, changeOrigin: true },
-          '/socket.io': { target: apiOrigin, ws: true, changeOrigin: true },
-        },
+    // Relative `/api` and `/socket.io` URLs must reach Nest even when the
+    // browser opens Vite directly (port 5173) instead of nginx (8080). Inside
+    // Compose the API hostname is `api`, not localhost.
+    proxy: {
+      '/api': { target: apiOrigin, changeOrigin: true },
+      '/socket.io': { target: apiOrigin, ws: true, changeOrigin: true },
+    },
   },
   build: {
     outDir: 'dist',

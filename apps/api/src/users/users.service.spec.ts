@@ -12,6 +12,7 @@ import type { UserRepository } from './user.repository.interface.js';
 describe('UsersService', () => {
   const findById = vi.fn<UserRepository['findById']>();
   const findByUsername = vi.fn<UserRepository['findByUsername']>();
+  const searchByQuery = vi.fn<UserRepository['searchByQuery']>();
   const updateProfile = vi.fn<UserRepository['updateProfile']>();
 
   const repository: UserRepository = {
@@ -20,6 +21,7 @@ describe('UsersService', () => {
     findByUsername,
     findByUsernames: vi.fn(),
     findByIds: vi.fn(),
+    searchByQuery,
     create: vi.fn(),
     updateProfile,
     updateLastSeenAt: vi.fn(),
@@ -74,6 +76,38 @@ describe('UsersService', () => {
     await expect(service.getPublicProfileByUsername('alex')).resolves.toMatchObject({
       id: '507f1f77bcf86cd799439011',
       username: 'alex',
+    });
+  });
+
+  it('maps directory search results to public profiles', async () => {
+    searchByQuery.mockResolvedValue([
+      {
+        id: '507f1f77bcf86cd799439012',
+        username: 'bob',
+        email: 'bob@example.com',
+        displayName: 'Bob Builder',
+        role: 'USER',
+        createdAt: new Date('2026-01-01T00:00:00.000Z'),
+        updatedAt: new Date('2026-01-02T00:00:00.000Z'),
+      },
+    ]);
+
+    await expect(
+      service.searchPublicProfiles('507f1f77bcf86cd799439011', { q: 'bob' }),
+    ).resolves.toMatchObject([
+      {
+        id: '507f1f77bcf86cd799439012',
+        username: 'bob',
+        displayName: 'Bob Builder',
+        role: 'USER',
+        createdAt: '2026-01-01T00:00:00.000Z',
+      },
+    ]);
+
+    expect(searchByQuery).toHaveBeenCalledWith({
+      text: 'bob',
+      limit: 20,
+      excludeUserId: '507f1f77bcf86cd799439011',
     });
   });
 
@@ -164,6 +198,7 @@ describe('UsersService', () => {
         findByUsername,
         findByUsernames: vi.fn(),
         findByIds: vi.fn(),
+        searchByQuery: vi.fn(),
         create: vi.fn(),
         updateProfile,
         updateLastSeenAt,

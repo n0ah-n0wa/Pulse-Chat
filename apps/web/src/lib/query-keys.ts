@@ -17,6 +17,7 @@ export const queryKeys = {
     all: ['users'] as const,
     profile: (userId: string) => [...queryKeys.users.all, 'profile', userId] as const,
     byUsername: (username: string) => [...queryKeys.users.all, 'username', username] as const,
+    search: (query: string) => [...queryKeys.users.all, 'search', query] as const,
     me: () => [...queryKeys.users.all, 'me'] as const,
   },
 };

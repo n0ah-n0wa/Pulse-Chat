@@ -11,6 +11,7 @@ describe('MentionResolverService', () => {
     findByUsername: vi.fn(),
     findByUsernames,
     findByIds: vi.fn(),
+    searchByQuery: vi.fn(),
     create: vi.fn(),
     updateProfile: vi.fn(),
     updateLastSeenAt: vi.fn(),

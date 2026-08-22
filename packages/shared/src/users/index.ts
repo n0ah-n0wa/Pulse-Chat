@@ -3,6 +3,7 @@ export type { UserRole } from './user-role.js';
 export { USER_ROLES } from './user-role.js';
 export type {
   CreateUserInput,
+  SearchUsersQuery,
   SettingsProfileInput,
   UpdateUserProfileInput,
 } from './user-validation.js';
@@ -13,6 +14,8 @@ export {
   bioSchema,
   displayNameSchema,
   emailSchema,
+  normalizeDirectoryQuery,
+  searchUsersQuerySchema,
   settingsProfileSchema,
   updateUserProfileSchema,
   usernameSchema,

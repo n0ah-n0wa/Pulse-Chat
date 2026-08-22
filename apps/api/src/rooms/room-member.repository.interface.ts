@@ -23,6 +23,7 @@ export interface RoomMemberRepository {
   findByRoomAndUser(roomId: string, userId: string): Promise<RoomMemberRecord | null>;
   findByRoomId(roomId: string): Promise<RoomMemberRecord[]>;
   findByUserId(userId: string): Promise<RoomMemberRecord[]>;
+  findByRoomIds(roomIds: readonly string[]): Promise<RoomMemberRecord[]>;
   updateRole(
     roomId: string,
     userId: string,

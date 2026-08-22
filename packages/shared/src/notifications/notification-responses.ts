@@ -7,6 +7,8 @@ export interface NotificationResponse {
   readonly type: NotificationType;
   /** The room, message, or other entity this notification concerns. */
   readonly referenceId: string;
+  /** Room to open when the recipient selects this notification. */
+  readonly roomId?: string;
   readonly actorId: string;
   readonly isRead: boolean;
   readonly createdAt: string;

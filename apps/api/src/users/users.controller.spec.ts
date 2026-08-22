@@ -90,6 +90,72 @@ describe('UsersController', () => {
     expect(response.body).not.toHaveProperty('passwordHash');
   });
 
+  it('GET /api/users/search requires authentication', async () => {
+    const response = await request(httpServer)
+      .get('/api/users/search')
+      .query({ q: 'alex' })
+      .expect(401);
+
+    expect(response.body).toMatchObject({
+      code: API_ERROR_CODES.UNAUTHORIZED,
+    });
+  });
+
+  it('GET /api/users/search matches username or display name and omits the caller', async () => {
+    const alice = await registerTestUser(httpServer, {
+      username: 'search_alice',
+      email: 'search_alice@example.com',
+      displayName: 'Alice Search',
+    });
+    const bob = await registerTestUser(httpServer, {
+      username: 'search_bob',
+      email: 'search_bob@example.com',
+      displayName: 'Bob Builder',
+    });
+    await registerTestUser(httpServer, {
+      username: 'unrelated',
+      email: 'unrelated@example.com',
+      displayName: 'Unrelated',
+    });
+
+    const byUsername = await request(httpServer)
+      .get('/api/users/search')
+      .query({ q: '@search_bob' })
+      .set(bearerAuthorization(alice.accessToken))
+      .expect(200);
+
+    expect(byUsername.body).toEqual([
+      expect.objectContaining({
+        id: bob.userId,
+        username: 'search_bob',
+        displayName: 'Bob Builder',
+      }),
+    ]);
+    const [firstMatch] = byUsername.body as { email?: string }[];
+    expect(firstMatch).not.toHaveProperty('email');
+
+    const byDisplayName = await request(httpServer)
+      .get('/api/users/search')
+      .query({ q: 'Alice' })
+      .set(bearerAuthorization(bob.accessToken))
+      .expect(200);
+
+    expect(byDisplayName.body).toEqual([
+      expect.objectContaining({
+        id: alice.userId,
+        username: 'search_alice',
+      }),
+    ]);
+
+    const selfOmitted = await request(httpServer)
+      .get('/api/users/search')
+      .query({ q: 'search_alice' })
+      .set(bearerAuthorization(alice.accessToken))
+      .expect(200);
+
+    expect(selfOmitted.body).toEqual([]);
+  });
+
   it('PATCH /api/users/me requires authentication', async () => {
     const response = await request(httpServer)
       .patch('/api/users/me')

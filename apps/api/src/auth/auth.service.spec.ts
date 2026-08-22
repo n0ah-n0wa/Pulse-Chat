@@ -36,6 +36,7 @@ describe('AuthService', () => {
     findByUsername,
     findByUsernames: vi.fn(),
     findByIds: vi.fn(),
+    searchByQuery: vi.fn(),
     create: createUser,
     updateProfile,
     updateLastSeenAt: vi.fn(),

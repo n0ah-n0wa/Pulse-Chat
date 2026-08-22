@@ -1,16 +1,23 @@
 import { useMemo } from 'react';
 
-import { useRoomMembersQuery } from '../../hooks/useRoomMembersQuery';
+import { useAuth } from '../../hooks/useAuth';
 import { useAuthorProfiles } from '../../hooks/useAuthorProfiles';
+import { useRoomMembersQuery } from '../../hooks/useRoomMembersQuery';
+import { useRoomQuery } from '../../hooks/useRoomsQuery';
 import { toDisplayErrorMessage } from '../../lib/errors';
+import { AvatarImage } from '../account/AvatarImage';
+import { InviteMemberForm } from './InviteMemberForm';
 import { PresenceIndicator } from './PresenceIndicator';
 import { ListSkeleton, StatusPanel } from './StatusPanel';
+import { UserActionMenu } from './UserActionMenu';
 
 interface MemberListProps {
   readonly roomId: string | undefined;
 }
 
 export function MemberList({ roomId }: MemberListProps) {
+  const { user: currentUser } = useAuth();
+  const roomQuery = useRoomQuery(roomId);
   const membersQuery = useRoomMembersQuery(roomId);
 
   const authorIds = useMemo(
@@ -53,31 +60,52 @@ export function MemberList({ roomId }: MemberListProps) {
   }
 
   const members = membersQuery.data ?? [];
-  if (members.length === 0) {
-    return <StatusPanel title="No members" message="This room does not have any members yet." />;
-  }
+  const room = roomQuery.data;
 
   return (
-    <ul aria-label="Room members" className="space-y-1">
-      {members.map((member) => {
-        const profile = authors.get(member.userId);
-        const displayName = profile?.displayName ?? profile?.username ?? member.userId.slice(-6);
+    <div>
+      {room !== undefined ? (
+        <InviteMemberForm room={room} memberUserIds={members.map((member) => member.userId)} />
+      ) : null}
+      {members.length === 0 ? (
+        <StatusPanel title="No members" message="This room does not have any members yet." />
+      ) : (
+        <ul aria-label="Room members" className="space-y-1">
+          {members.map((member) => {
+            const profile = authors.get(member.userId);
+            const isCurrentUser = member.userId === currentUser?.id;
+            const displayName = isCurrentUser
+              ? 'You'
+              : (profile?.displayName ?? profile?.username ?? member.userId.slice(-6));
+            const username =
+              profile?.username ?? (isCurrentUser ? currentUser?.username : undefined);
 
-        return (
-          <li
-            key={member.id}
-            className="rounded-md px-3 py-2 text-sm text-slate-700 dark:text-slate-200"
-          >
-            <div className="flex items-center gap-2">
-              <span className="font-medium">{displayName}</span>
-              <PresenceIndicator userId={member.userId} authors={authors} showLabel />
-            </div>
-            <span className="mt-0.5 block text-xs capitalize text-slate-500 dark:text-slate-400">
-              {member.role.toLowerCase()}
-            </span>
-          </li>
-        );
-      })}
-    </ul>
+            return (
+              <li
+                key={member.id}
+                className="rounded-md px-3 py-2 text-sm text-slate-700 dark:text-slate-200"
+              >
+                <div className="flex items-center gap-2">
+                  <AvatarImage
+                    displayName={profile?.displayName ?? displayName}
+                    avatarUrl={profile?.avatarUrl}
+                    size="sm"
+                  />
+                  <UserActionMenu
+                    userId={member.userId}
+                    username={username}
+                    displayName={displayName}
+                  />
+                  <PresenceIndicator userId={member.userId} authors={authors} showLabel />
+                </div>
+                <span className="mt-0.5 block text-xs capitalize text-slate-500 dark:text-slate-400">
+                  {member.role.toLowerCase()}
+                </span>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </div>
   );
 }

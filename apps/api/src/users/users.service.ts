@@ -5,10 +5,12 @@ import { HttpStatus, Inject, Injectable } from '@nestjs/common';
 
 import {
   ATTACHMENT_ERROR_CODES,
+  DIRECTORY_SEARCH_LIMIT_DEFAULT,
   USER_ERROR_CODES,
   usernameSchema,
   type CurrentUserProfile,
   type PublicUserProfile,
+  type SearchUsersQuery,
   type UpdateUserProfileInput,
 } from '@pulse-chat/shared';
 
@@ -71,6 +73,19 @@ export class UsersService {
 
     const user = await this.users.findByUsername(parsed.data);
     return this.requirePublicProfile(user);
+  }
+
+  async searchPublicProfiles(
+    actorId: string,
+    query: SearchUsersQuery,
+  ): Promise<PublicUserProfile[]> {
+    const records = await this.users.searchByQuery({
+      text: query.q,
+      limit: query.limit ?? DIRECTORY_SEARCH_LIMIT_DEFAULT,
+      excludeUserId: actorId,
+    });
+
+    return records.map((record) => toPublicUserProfile(record));
   }
 
   async updateCurrentUserProfile(

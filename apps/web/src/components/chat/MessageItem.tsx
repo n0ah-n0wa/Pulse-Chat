@@ -4,9 +4,11 @@ import type { MessageResponse, PublicUserProfile } from '@pulse-chat/shared';
 import { MESSAGE_MAX_LENGTH } from '@pulse-chat/shared';
 
 import { formatMessageTime } from '../../lib/message-utils';
+import { AvatarImage } from '../account/AvatarImage';
 import { AttachmentPreview } from './AttachmentPreview';
 import { MessageReactions } from './MessageReactions';
 import { ReplyPreview } from './ReplyPreview';
+import { UserActionMenu } from './UserActionMenu';
 
 interface MessageItemProps {
   readonly message: MessageResponse;
@@ -70,12 +72,11 @@ export const MessageItem = memo(function MessageItem({
       <div className="group flex gap-2">
         <div className="w-10 shrink-0 pt-0.5 text-right">
           {showAuthor ? (
-            <span
-              aria-hidden="true"
-              className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-slate-200 text-xs font-semibold text-slate-700 dark:bg-slate-700 dark:text-slate-100"
-            >
-              {authorLabel.slice(0, 1).toUpperCase()}
-            </span>
+            <AvatarImage
+              displayName={author?.displayName ?? authorLabel}
+              avatarUrl={author?.avatarUrl}
+              size="sm"
+            />
           ) : (
             <span className="invisible text-[10px] text-slate-400 group-hover:visible">
               {formatMessageTime(message.createdAt)}
@@ -86,9 +87,12 @@ export const MessageItem = memo(function MessageItem({
         <div className="min-w-0 flex-1">
           {showAuthor ? (
             <div className="mb-0.5 flex flex-wrap items-baseline gap-2">
-              <span className="text-sm font-semibold text-slate-900 dark:text-slate-50">
-                {authorLabel}
-              </span>
+              <UserActionMenu
+                userId={message.authorId}
+                username={author?.username}
+                displayName={authorLabel}
+                className="text-sm font-semibold text-slate-900 underline-offset-2 hover:underline dark:text-slate-50"
+              />
               <time
                 dateTime={message.createdAt}
                 className="text-xs text-slate-500 dark:text-slate-400"

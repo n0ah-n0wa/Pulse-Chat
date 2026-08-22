@@ -82,7 +82,12 @@ export class NotificationsService {
   // Convenience helpers called by other services
   // ---------------------------------------------------------------------------
 
-  async notifyMention(actorId: string, recipientId: string, messageId: string): Promise<void> {
+  async notifyMention(
+    actorId: string,
+    recipientId: string,
+    messageId: string,
+    roomId: string,
+  ): Promise<void> {
     if (actorId === recipientId) {
       return;
     }
@@ -91,11 +96,17 @@ export class NotificationsService {
       userId: recipientId,
       type: NOTIFICATION_TYPES.MENTION,
       referenceId: messageId,
+      roomId,
       actorId,
     });
   }
 
-  async notifyReply(actorId: string, originalAuthorId: string, messageId: string): Promise<void> {
+  async notifyReply(
+    actorId: string,
+    originalAuthorId: string,
+    messageId: string,
+    roomId: string,
+  ): Promise<void> {
     if (actorId === originalAuthorId) {
       return;
     }
@@ -104,6 +115,7 @@ export class NotificationsService {
       userId: originalAuthorId,
       type: NOTIFICATION_TYPES.REPLY,
       referenceId: messageId,
+      roomId,
       actorId,
     });
   }
@@ -112,6 +124,7 @@ export class NotificationsService {
     actorId: string,
     recipientId: string,
     messageId: string,
+    roomId: string,
   ): Promise<void> {
     if (actorId === recipientId) {
       return;
@@ -121,6 +134,7 @@ export class NotificationsService {
       userId: recipientId,
       type: NOTIFICATION_TYPES.DIRECT_MESSAGE,
       referenceId: messageId,
+      roomId,
       actorId,
     });
   }
@@ -134,6 +148,7 @@ export class NotificationsService {
       userId: recipientId,
       type: NOTIFICATION_TYPES.ROOM_INVITATION,
       referenceId: roomId,
+      roomId,
       actorId,
     });
   }

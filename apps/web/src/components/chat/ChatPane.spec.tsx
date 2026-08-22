@@ -1,6 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { MEMBERSHIP_ROLES, ROOM_TYPES, TOKEN_TYPE } from '@pulse-chat/shared';
@@ -85,7 +86,9 @@ function renderChatPane(roomId: string = ROOM_ID) {
 
   return render(
     <QueryClientProvider client={queryClient}>
-      <ChatPane roomId={roomId} />
+      <MemoryRouter>
+        <ChatPane roomId={roomId} />
+      </MemoryRouter>
     </QueryClientProvider>,
   );
 }
@@ -265,5 +268,58 @@ describe('ChatPane', () => {
     renderChatPane();
 
     expect(await screen.findByText('No messages yet')).toBeInTheDocument();
+  });
+
+  it('shows the peer avatar in a direct conversation', async () => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation((input) => {
+      const url = requestUrl(input);
+      if (url.includes(`/api/rooms/${ROOM_ID}/messages`)) {
+        return Promise.resolve(jsonResponse({ items: [historyMessage] }));
+      }
+      if (url.includes(`/api/users/${OTHER_USER_ID}`)) {
+        return Promise.resolve(
+          jsonResponse({
+            id: OTHER_USER_ID,
+            username: 'bob',
+            displayName: 'Bob',
+            avatarUrl: `/api/users/${OTHER_USER_ID}/avatar`,
+            role: 'USER',
+            createdAt: '2026-08-18T00:00:00.000Z',
+          }),
+        );
+      }
+      if (url.includes(`/api/users/${USER_ID}`)) {
+        return Promise.resolve(
+          jsonResponse({
+            id: USER_ID,
+            username: 'alice',
+            displayName: 'Alice',
+            avatarUrl: `/api/users/${USER_ID}/avatar`,
+            role: 'USER',
+            createdAt: '2026-08-18T00:00:00.000Z',
+          }),
+        );
+      }
+      if (url.includes(`/api/rooms/${ROOM_ID}`)) {
+        return Promise.resolve(
+          jsonResponse({
+            id: ROOM_ID,
+            type: ROOM_TYPES.DIRECT,
+            peerUserId: OTHER_USER_ID,
+            createdAt: '2026-08-18T00:00:00.000Z',
+            updatedAt: '2026-08-18T00:00:00.000Z',
+            currentUserRole: MEMBERSHIP_ROLES.MEMBER,
+          }),
+        );
+      }
+      return Promise.resolve(
+        jsonResponse({ statusCode: 404, code: 'NOT_FOUND', message: 'Missing' }, 404),
+      );
+    });
+
+    renderChatPane();
+
+    expect(await screen.findByRole('heading', { name: 'Bob' })).toBeInTheDocument();
+    expect(screen.getAllByRole('img', { name: 'Bob avatar' }).length).toBeGreaterThan(0);
   });
 });

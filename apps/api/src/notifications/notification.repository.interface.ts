@@ -6,6 +6,8 @@ export interface NotificationRecord {
   readonly type: NotificationType;
   /** The entity (message, room, etc.) this notification points to. */
   readonly referenceId: string;
+  /** Room the recipient should open for this notification. */
+  readonly roomId?: string;
   /** The user who triggered the notification. */
   readonly actorId: string;
   readonly isRead: boolean;
@@ -17,6 +19,7 @@ export interface CreateNotificationInput {
   readonly userId: string;
   readonly type: NotificationType;
   readonly referenceId: string;
+  readonly roomId: string;
   readonly actorId: string;
 }
 

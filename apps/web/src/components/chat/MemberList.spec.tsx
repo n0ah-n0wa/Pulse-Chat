@@ -1,5 +1,7 @@
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { MEMBERSHIP_ROLES } from '@pulse-chat/shared';
@@ -35,7 +37,9 @@ function renderMembers(roomId: string | undefined) {
 
   return render(
     <QueryClientProvider client={queryClient}>
-      <MemberList roomId={roomId} />
+      <MemoryRouter>
+        <MemberList roomId={roomId} />
+      </MemoryRouter>
     </QueryClientProvider>,
   );
 }
@@ -89,12 +93,26 @@ describe('MemberList', () => {
         );
       }
 
+      if (url.includes(`/api/rooms/${ROOM_ID}`)) {
+        return Promise.resolve(
+          jsonResponse({
+            id: ROOM_ID,
+            name: 'General',
+            type: 'PUBLIC',
+            currentUserRole: MEMBERSHIP_ROLES.OWNER,
+            createdAt: '2026-08-18T00:00:00.000Z',
+            updatedAt: '2026-08-18T00:00:00.000Z',
+          }),
+        );
+      }
+
       if (url.includes(`/api/users/${MEMBER_USER}`)) {
         return Promise.resolve(
           jsonResponse({
             id: MEMBER_USER,
             username: 'bob',
             displayName: 'Bob',
+            avatarUrl: `/api/users/${MEMBER_USER}/avatar`,
             role: 'USER',
             createdAt: '2026-08-18T00:00:00.000Z',
           }),
@@ -109,8 +127,76 @@ describe('MemberList', () => {
     renderMembers(ROOM_ID);
 
     expect(await screen.findByText('Bob')).toBeInTheDocument();
+    expect(screen.getByRole('img', { name: 'Bob avatar' })).toHaveAttribute(
+      'src',
+      `/api/users/${MEMBER_USER}/avatar`,
+    );
     expect(screen.getByText('owner')).toBeInTheDocument();
     expect(screen.getByText('Online')).toBeInTheDocument();
+    expect(screen.getByLabelText('Invite a member')).toBeInTheDocument();
+  });
+
+  it('invites a matching user into the room', async () => {
+    const user = userEvent.setup();
+    const invitedUserId = '507f1f77bcf86cd799439099';
+
+    vi.spyOn(globalThis, 'fetch').mockImplementation((input, init) => {
+      const url = requestUrl(input);
+      const method = init?.method ?? 'GET';
+
+      if (url.includes(`/api/rooms/${ROOM_ID}/members`) && method === 'POST') {
+        return Promise.resolve(
+          jsonResponse({
+            id: '507f1f77bcf86cd799439032',
+            roomId: ROOM_ID,
+            userId: invitedUserId,
+            role: MEMBERSHIP_ROLES.MEMBER,
+            joinedAt: '2026-08-18T00:00:00.000Z',
+          }),
+        );
+      }
+
+      if (url.includes(`/api/rooms/${ROOM_ID}/members`)) {
+        return Promise.resolve(jsonResponse([]));
+      }
+
+      if (url.includes(`/api/rooms/${ROOM_ID}`)) {
+        return Promise.resolve(
+          jsonResponse({
+            id: ROOM_ID,
+            name: 'Private cabal',
+            type: 'PRIVATE',
+            currentUserRole: MEMBERSHIP_ROLES.OWNER,
+            createdAt: '2026-08-18T00:00:00.000Z',
+            updatedAt: '2026-08-18T00:00:00.000Z',
+          }),
+        );
+      }
+
+      if (url.includes('/api/users/search')) {
+        return Promise.resolve(
+          jsonResponse([
+            {
+              id: invitedUserId,
+              username: 'carol',
+              displayName: 'Carol',
+              role: 'USER',
+              createdAt: '2026-08-18T00:00:00.000Z',
+            },
+          ]),
+        );
+      }
+
+      return Promise.resolve(
+        jsonResponse({ statusCode: 404, code: 'NOT_FOUND', message: 'Missing' }, 404),
+      );
+    });
+
+    renderMembers(ROOM_ID);
+    await user.type(await screen.findByLabelText('Invite by name'), 'carol');
+    expect(await screen.findByRole('button', { name: 'Invite' })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Invite' }));
+    expect(await screen.findByLabelText('Invite a member')).toBeInTheDocument();
   });
 
   it('shows an error when members cannot be loaded', async () => {

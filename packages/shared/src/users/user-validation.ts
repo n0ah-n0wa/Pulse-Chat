@@ -1,6 +1,11 @@
 import { z } from 'zod';
 
-import { USERNAME_MAX_LENGTH, USERNAME_MIN_LENGTH } from '../constants.js';
+import {
+  DIRECTORY_SEARCH_LIMIT_MAX,
+  DIRECTORY_SEARCH_QUERY_MAX_LENGTH,
+  USERNAME_MAX_LENGTH,
+  USERNAME_MIN_LENGTH,
+} from '../constants.js';
 import type { UserRole } from './user-role.js';
 
 /** Username may contain letters, numbers, `_` and `-` (specification section 7). */
@@ -65,6 +70,46 @@ export const settingsProfileSchema = z
 
 export type UpdateUserProfileInput = z.infer<typeof updateUserProfileSchema>;
 export type SettingsProfileInput = z.infer<typeof settingsProfileSchema>;
+
+/**
+ * Trims directory search input and drops a leading `@` or `#` so people can
+ * type Slack/Discord-style mentions or channel names.
+ */
+export function normalizeDirectoryQuery(raw: string): string {
+  return raw
+    .trim()
+    .replace(/^[@#]+/u, '')
+    .trim();
+}
+
+export const searchUsersQuerySchema = z.object({
+  q: z.preprocess(
+    (value: unknown) => {
+      if (typeof value !== 'string') {
+        return value;
+      }
+      return normalizeDirectoryQuery(value);
+    },
+    z
+      .string()
+      .min(1, 'Search query cannot be empty')
+      .max(
+        DIRECTORY_SEARCH_QUERY_MAX_LENGTH,
+        `Search query cannot exceed ${String(DIRECTORY_SEARCH_QUERY_MAX_LENGTH)} characters`,
+      ),
+  ),
+  limit: z.preprocess((value: unknown) => {
+    if (value === undefined || value === '') {
+      return undefined;
+    }
+    if (typeof value === 'number' || typeof value === 'string') {
+      return Number(value);
+    }
+    return value;
+  }, z.number().int().min(1).max(DIRECTORY_SEARCH_LIMIT_MAX).optional()),
+});
+
+export type SearchUsersQuery = z.infer<typeof searchUsersQuerySchema>;
 
 /** Fields written when creating a user document (password already hashed). */
 export interface CreateUserInput {

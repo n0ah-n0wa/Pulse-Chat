@@ -21,7 +21,7 @@ import type { MessageRepository } from '../messages/message.repository.interface
 import { MESSAGE_REPOSITORY } from '../messages/messages.tokens.js';
 import { NotificationsService } from '../notifications/notifications.service.js';
 import { RealtimeMessageBroadcastService } from '../realtime/realtime-message-broadcast.service.js';
-import type { UserRepository } from '../users/user.repository.interface.js';
+import type { UserRecord, UserRepository } from '../users/user.repository.interface.js';
 import { USER_REPOSITORY } from '../users/users.tokens.js';
 import type { RoomMemberRecord, RoomMemberRepository } from './room-member.repository.interface.js';
 import {
@@ -36,7 +36,7 @@ import {
   canViewRoom,
 } from './room-permissions.js';
 import type { RoomRecord, RoomRepository } from './room.repository.interface.js';
-import { toRoomMemberResponse, toRoomResponse } from './room.mapper.js';
+import { toRoomMemberResponse, toRoomResponse, type RoomPeerPreview } from './room.mapper.js';
 import { ROOM_MEMBER_REPOSITORY, ROOM_REPOSITORY } from './rooms.tokens.js';
 import { buildDirectKey } from './utils/direct-key.js';
 
@@ -67,9 +67,21 @@ export class RoomsService {
       roomsById.set(room.id, room);
     }
 
-    return [...roomsById.values()]
+    const listedRooms = [...roomsById.values()];
+    const peerUserIdByRoomId = await this.peerUserIdsByRoomId(userId, listedRooms);
+    const peerPreviews = await this.peerPreviewsById([...new Set(peerUserIdByRoomId.values())]);
+
+    return listedRooms
       .sort((left, right) => right.updatedAt.getTime() - left.updatedAt.getTime())
-      .map((room) => toRoomResponse(room, membershipByRoomId.get(room.id)));
+      .map((room) => {
+        const peerUserId = peerUserIdByRoomId.get(room.id);
+        return toRoomResponse(
+          room,
+          membershipByRoomId.get(room.id),
+          peerUserId,
+          peerUserId === undefined ? undefined : peerPreviews.get(peerUserId),
+        );
+      });
   }
 
   async createRoom(userId: string, input: CreateRoomInput): Promise<RoomResponse> {
@@ -95,7 +107,11 @@ export class RoomsService {
 
   async getRoom(userId: string, roomId: string): Promise<RoomResponse> {
     const { room, membership } = await this.loadAccessibleRoom(userId, roomId);
-    return toRoomResponse(room, membership ?? undefined);
+    const peerUserId =
+      room.type === ROOM_TYPES.DIRECT ? await this.getDirectRoomPeer(room.id, userId) : undefined;
+    const peer =
+      peerUserId === undefined ? undefined : ((await this.users.findById(peerUserId)) ?? undefined);
+    return toRoomResponse(room, membership ?? undefined, peerUserId, peer);
   }
 
   async updateRoom(userId: string, roomId: string, input: UpdateRoomInput): Promise<RoomResponse> {
@@ -385,7 +401,7 @@ export class RoomsService {
       );
     }
 
-    await this.requireUser(peerUserId);
+    const peer = await this.requireUser(peerUserId);
 
     const directKey = buildDirectKey(userId, peerUserId);
     const existing = await this.rooms.findByDirectKey(directKey);
@@ -438,7 +454,7 @@ export class RoomsService {
     }
 
     const membership = await this.members.findByRoomAndUser(room.id, userId);
-    return toRoomResponse(room, membership ?? undefined);
+    return toRoomResponse(room, membership ?? undefined, peerUserId, peer);
   }
 
   private async evictMemberFromRealtime(roomId: string, userId: string): Promise<void> {
@@ -491,6 +507,39 @@ export class RoomsService {
     const members = await this.members.findByRoomId(roomId);
     const peer = members.find((member) => member.userId !== actorId);
     return peer?.userId;
+  }
+
+  private async peerUserIdsByRoomId(
+    actorId: string,
+    rooms: readonly RoomRecord[],
+  ): Promise<Map<string, string>> {
+    const directRoomIds = rooms
+      .filter((room) => room.type === ROOM_TYPES.DIRECT)
+      .map((room) => room.id);
+    if (directRoomIds.length === 0) {
+      return new Map();
+    }
+
+    const memberships = await this.members.findByRoomIds(directRoomIds);
+    const peerByRoomId = new Map<string, string>();
+    for (const membership of memberships) {
+      if (membership.userId !== actorId) {
+        peerByRoomId.set(membership.roomId, membership.userId);
+      }
+    }
+
+    return peerByRoomId;
+  }
+
+  private async peerPreviewsById(
+    peerUserIds: readonly string[],
+  ): Promise<Map<string, RoomPeerPreview>> {
+    if (peerUserIds.length === 0) {
+      return new Map();
+    }
+
+    const records = await this.users.findByIds(peerUserIds);
+    return new Map(records.map((record) => [record.id, record]));
   }
 
   /**
@@ -550,7 +599,7 @@ export class RoomsService {
     return room;
   }
 
-  private async requireUser(userId: string): Promise<void> {
+  private async requireUser(userId: string): Promise<UserRecord> {
     if (!isValidObjectId(userId)) {
       throw new ApiException(
         USER_ERROR_CODES.USER_NOT_FOUND,
@@ -567,6 +616,8 @@ export class RoomsService {
         HttpStatus.NOT_FOUND,
       );
     }
+
+    return user;
   }
 
   private async createMembership(

@@ -70,6 +70,16 @@ export class MongooseRoomMemberRepository implements RoomMemberRepository {
     return documents.map((document) => toRoomMemberRecord(document));
   }
 
+  async findByRoomIds(roomIds: readonly string[]): Promise<RoomMemberRecord[]> {
+    const objectIds = roomIds.map((roomId) => new Types.ObjectId(roomId));
+    if (objectIds.length === 0) {
+      return [];
+    }
+
+    const documents = await this.roomMemberModel.find({ roomId: { $in: objectIds } }).exec();
+    return documents.map((document) => toRoomMemberRecord(document));
+  }
+
   async updateRole(
     roomId: string,
     userId: string,
