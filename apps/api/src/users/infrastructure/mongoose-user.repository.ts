@@ -11,9 +11,24 @@ import type {
   UserRepository,
 } from '../user.repository.interface.js';
 import { USER_REPOSITORY } from '../users.tokens.js';
-import { UserDocument, type UserDocumentHydrated } from './user.schema.js';
+import { UserDocument } from './user.schema.js';
 
-function toUserRecord(document: UserDocumentHydrated, passwordHash?: string): UserRecord {
+function toUserRecord(
+  document: {
+    readonly _id: Types.ObjectId;
+    readonly username: string;
+    readonly email: string;
+    readonly passwordHash?: string;
+    readonly displayName: string;
+    readonly avatarUrl?: string;
+    readonly bio?: string;
+    readonly role: UserRecord['role'];
+    readonly createdAt: Date;
+    readonly updatedAt: Date;
+    readonly lastSeenAt?: Date;
+  },
+  passwordHash?: string,
+): UserRecord {
   return {
     id: document._id.toHexString(),
     username: document.username,
@@ -34,7 +49,7 @@ export class MongooseUserRepository implements UserRepository {
   constructor(@InjectModel(UserDocument.name) private readonly userModel: Model<UserDocument>) {}
 
   async findById(id: string): Promise<UserRecord | null> {
-    const document = await this.userModel.findById(id).exec();
+    const document = await this.userModel.findById(id).lean().exec();
     return document ? toUserRecord(document) : null;
   }
 
@@ -42,13 +57,14 @@ export class MongooseUserRepository implements UserRepository {
     const document = await this.userModel
       .findOne({ email: email.toLowerCase() })
       .select('+passwordHash')
+      .lean()
       .exec();
 
     return document ? toUserRecord(document) : null;
   }
 
   async findByUsername(username: string): Promise<UserRecord | null> {
-    const document = await this.userModel.findOne({ username }).select('+passwordHash').exec();
+    const document = await this.userModel.findOne({ username }).lean().exec();
 
     return document ? toUserRecord(document) : null;
   }
@@ -58,7 +74,10 @@ export class MongooseUserRepository implements UserRepository {
       return [];
     }
 
-    const documents = await this.userModel.find({ username: { $in: [...usernames] } }).exec();
+    const documents = await this.userModel
+      .find({ username: { $in: [...usernames] } })
+      .lean()
+      .exec();
 
     return documents.map((document) => toUserRecord(document));
   }
@@ -69,7 +88,10 @@ export class MongooseUserRepository implements UserRepository {
       return [];
     }
 
-    const documents = await this.userModel.find({ _id: { $in: validIds } }).exec();
+    const documents = await this.userModel
+      .find({ _id: { $in: validIds } })
+      .lean()
+      .exec();
     return documents.map((document) => toUserRecord(document));
   }
 

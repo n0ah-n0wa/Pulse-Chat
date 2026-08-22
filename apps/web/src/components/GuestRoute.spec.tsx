@@ -5,7 +5,6 @@ import { describe, expect, it } from 'vitest';
 import { TOKEN_TYPE } from '@pulse-chat/shared';
 
 import { GuestRoute } from './GuestRoute';
-import { AppHomePage } from '../pages/AppHomePage';
 import { LoginPage } from '../pages/LoginPage';
 import { useAuthStore } from '../store/auth-store';
 
@@ -31,7 +30,7 @@ describe('GuestRoute', () => {
       [
         {
           path: '/app',
-          element: <AppHomePage />,
+          element: <h1>Protected workspace</h1>,
         },
         {
           element: <GuestRoute />,

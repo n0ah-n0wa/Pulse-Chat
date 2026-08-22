@@ -11,6 +11,9 @@ export interface RoomResponse {
   readonly createdAt: string;
   readonly updatedAt: string;
   readonly currentUserRole?: MembershipRole;
+  /** Last message the current user has read in this room (when they are a member). */
+  readonly lastReadMessageId?: string;
+  readonly lastReadAt?: string;
 }
 
 /** Membership payload returned by room member endpoints. */

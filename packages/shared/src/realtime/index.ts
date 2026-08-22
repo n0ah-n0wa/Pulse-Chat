@@ -6,11 +6,13 @@ export type {
   NotificationNewEvent,
   ReactionChangedEvent,
   RoomJoinedEvent,
-  UserOfflineEvent,
-  UserOnlineEvent,
   RoomLeftEvent,
   ServerToClientEvents,
   SocketErrorEvent,
+  TypingStartedEvent,
+  TypingStoppedEvent,
+  UserOfflineEvent,
+  UserOnlineEvent,
 } from './realtime-events.js';
 export { CLIENT_SOCKET_EVENTS, SERVER_SOCKET_EVENTS } from './realtime-events.js';
 export type {
@@ -18,10 +20,12 @@ export type {
   RoomJoinEventInput,
   RoomLeaveEventInput,
   SocketHandshakeAuth,
+  TypingRoomEventInput,
 } from './realtime-validation.js';
 export {
   messageSendEventSchema,
   roomJoinEventSchema,
   roomLeaveEventSchema,
   socketHandshakeAuthSchema,
+  typingRoomEventSchema,
 } from './realtime-validation.js';

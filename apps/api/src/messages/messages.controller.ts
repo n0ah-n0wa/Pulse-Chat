@@ -16,6 +16,7 @@ import {
   addReactionSchema,
   createMessageSchema,
   listMessagesQuerySchema,
+  reactionEmojiSchema,
   searchMessagesQuerySchema,
   updateMessageSchema,
   type AddReactionInput,
@@ -32,12 +33,15 @@ import { CurrentUser } from '../auth/decorators/current-user.decorator.js';
 import { AuthGuard } from '../auth/guards/auth.guard.js';
 import type { AuthenticatedUser } from '../auth/types/authenticated-request.types.js';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe.js';
+import { RateLimited } from '../rate-limit/rate-limit.decorator.js';
+import { RATE_LIMIT_ACTIONS } from '../rate-limit/rate-limit.keys.js';
+import { UserRateLimitGuard } from '../rate-limit/user-rate-limit.guard.js';
 import { RealtimeMessageBroadcastService } from '../realtime/realtime-message-broadcast.service.js';
 import { MessagesService } from './messages.service.js';
 
 @ApiTags('messages')
 @ApiBearerAuth()
-@UseGuards(AuthGuard)
+@UseGuards(AuthGuard, UserRateLimitGuard)
 @Controller('rooms/:id/messages')
 export class RoomMessagesController {
   constructor(
@@ -46,8 +50,9 @@ export class RoomMessagesController {
   ) {}
 
   @Get('search')
+  @RateLimited(RATE_LIMIT_ACTIONS.SEARCH)
   @ApiOperation({ summary: 'Search messages in a room' })
-  search(
+  searchMessages(
     @CurrentUser() currentUser: AuthenticatedUser,
     @Param('id') roomId: string,
     @Query(new ZodValidationPipe(searchMessagesQuerySchema)) query: SearchMessagesQuery,
@@ -66,6 +71,7 @@ export class RoomMessagesController {
   }
 
   @Post()
+  @RateLimited(RATE_LIMIT_ACTIONS.MESSAGES)
   @ApiOperation({ summary: 'Create a message in a room' })
   create(
     @CurrentUser() currentUser: AuthenticatedUser,
@@ -86,7 +92,7 @@ export class RoomMessagesController {
 
 @ApiTags('messages')
 @ApiBearerAuth()
-@UseGuards(AuthGuard)
+@UseGuards(AuthGuard, UserRateLimitGuard)
 @Controller('messages')
 export class MessagesController {
   constructor(
@@ -95,6 +101,7 @@ export class MessagesController {
   ) {}
 
   @Patch(':id')
+  @RateLimited(RATE_LIMIT_ACTIONS.MESSAGES)
   @ApiOperation({ summary: 'Edit a message' })
   async update(
     @CurrentUser() currentUser: AuthenticatedUser,
@@ -108,6 +115,7 @@ export class MessagesController {
 
   @Delete(':id')
   @HttpCode(204)
+  @RateLimited(RATE_LIMIT_ACTIONS.MESSAGES)
   @ApiOperation({ summary: 'Soft-delete a message' })
   async delete(
     @CurrentUser() currentUser: AuthenticatedUser,
@@ -118,6 +126,7 @@ export class MessagesController {
   }
 
   @Post(':id/reactions')
+  @RateLimited(RATE_LIMIT_ACTIONS.MESSAGES)
   @ApiOperation({ summary: 'Toggle a reaction on a message' })
   async react(
     @CurrentUser() currentUser: AuthenticatedUser,
@@ -145,11 +154,12 @@ export class MessagesController {
   }
 
   @Delete(':id/reactions/:emoji')
+  @RateLimited(RATE_LIMIT_ACTIONS.MESSAGES)
   @ApiOperation({ summary: 'Remove a reaction from a message' })
   async removeReaction(
     @CurrentUser() currentUser: AuthenticatedUser,
     @Param('id') id: string,
-    @Param('emoji') emoji: string,
+    @Param('emoji', new ZodValidationPipe(reactionEmojiSchema)) emoji: string,
   ): Promise<MessageResponse> {
     const message = await this.messagesService.removeReaction(currentUser.userId, id, emoji);
     await this.realtimeBroadcast.broadcastReactionRemoved({

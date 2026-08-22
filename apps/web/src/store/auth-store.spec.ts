@@ -37,4 +37,18 @@ describe('useAuthStore', () => {
     expect(useAuthStore.getState().isAuthenticated()).toBe(false);
     expect(useAuthStore.getState().accessToken).toBeNull();
   });
+
+  it('rotates stored tokens without replacing the user profile', () => {
+    useAuthStore.getState().setSession(session);
+    useAuthStore.getState().applyTokens({
+      accessToken: 'next-access',
+      refreshToken: 'next-refresh',
+      accessTokenExpiresIn: 900,
+      tokenType: TOKEN_TYPE,
+    });
+
+    expect(useAuthStore.getState().accessToken).toBe('next-access');
+    expect(useAuthStore.getState().refreshToken).toBe('next-refresh');
+    expect(useAuthStore.getState().user?.username).toBe('alice');
+  });
 });

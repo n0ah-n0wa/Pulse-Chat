@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { TestRedisService } from '../../test/test-redis.service.js';
 import { presenceSessionKey, presenceUserKey, RedisPresenceStore } from './redis-presence.store.js';
@@ -83,14 +83,58 @@ describe('RedisPresenceStore', () => {
     expect(await store.getPresence(userId)).toBeNull();
   });
 
-  it('prunes a stale session whose TTL elapsed while another device remains', async () => {
+  it('loads many presence snapshots and prunes expired sessions', async () => {
+    const otherUserId = id();
+    await store.addConnection(userId, socketA, lastSeenAt, 45, INSTANCE_ID);
+    await store.addConnection(otherUserId, socketB, lastSeenAt, 45, INSTANCE_ID);
+
+    const snapshots = await store.getPresenceMany([userId, otherUserId, id()]);
+
+    expect(snapshots.size).toBe(2);
+    expect(snapshots.get(userId)).toMatchObject({
+      userId,
+      status: 'online',
+      socketIds: [socketA],
+    });
+    expect(snapshots.get(otherUserId)?.socketIds).toEqual([socketB]);
+  });
+
+  it('omits users whose sessions expired even if the user key remains', async () => {
+    await store.addConnection(userId, socketA, lastSeenAt, 45, INSTANCE_ID);
+    await redis.expire(presenceSessionKey(socketA), 0);
+
+    const snapshots = await store.getPresenceMany([userId]);
+
+    expect(snapshots.size).toBe(0);
+    expect(await redis.get(presenceUserKey(userId))).toBeNull();
+  });
+
+  it('returns an empty map without hitting Redis when no user ids are requested', async () => {
+    const mget = vi.spyOn(redis, 'mget');
+
+    expect(await store.getPresenceMany([])).toEqual(new Map());
+    expect(mget).not.toHaveBeenCalled();
+  });
+
+  it('prunes stale sessions with one mget and one srem', async () => {
+    const socketC = `socket-${id()}`;
     await store.addConnection(userId, socketA, lastSeenAt, 45, INSTANCE_ID);
     await store.addConnection(userId, socketB, lastSeenAt, 45, INSTANCE_ID);
+    await store.addConnection(userId, socketC, lastSeenAt, 45, INSTANCE_ID);
 
     await redis.expire(presenceSessionKey(socketA), 0);
+    await redis.expire(presenceSessionKey(socketC), 0);
+
+    const mget = vi.spyOn(redis, 'mget');
+    const srem = vi.spyOn(redis, 'srem');
     const presence = await store.getPresence(userId);
 
     expect(presence?.socketIds).toEqual([socketB]);
+    expect(mget).toHaveBeenCalledTimes(1);
+    expect(srem).toHaveBeenCalledTimes(1);
+    const sremCall = srem.mock.calls[0] ?? [];
+    expect(sremCall[0]).toBe(`presence:user:${userId}:sessions`);
+    expect([...sremCall.slice(1)].sort()).toEqual([socketA, socketC].sort());
   });
 
   it('refreshes a live session TTL and lastSeen', async () => {

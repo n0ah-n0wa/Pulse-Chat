@@ -1,6 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { MEMBERSHIP_ROLES, MESSAGE_ERROR_CODES, ROOM_ERROR_CODES } from '@pulse-chat/shared';
+import {
+  ATTACHMENT_ERROR_CODES,
+  MEMBERSHIP_ROLES,
+  MESSAGE_ERROR_CODES,
+  ROOM_ERROR_CODES,
+} from '@pulse-chat/shared';
 
 import { ApiException } from '../common/errors/api.exception.js';
 import type { AttachmentsService } from '../attachments/attachments.service.js';
@@ -92,11 +97,13 @@ describe('MessagesService', () => {
   const resolveAttachmentsForMessage = vi.fn<AttachmentsService['resolveAttachmentsForMessage']>();
   const linkAttachmentsToMessage = vi.fn<AttachmentsService['linkAttachmentsToMessage']>();
   const hydrateAttachmentResponses = vi.fn<AttachmentsService['hydrateAttachmentResponses']>();
+  const hydrateAttachmentMap = vi.fn<AttachmentsService['hydrateAttachmentMap']>();
 
   const roomsService = {
     requireMember,
     getRoomRecord,
     getDirectRoomPeer,
+    listMemberUserIds: vi.fn().mockResolvedValue([USER_ID, OTHER_USER_ID]),
   } as unknown as RoomsService;
   const notificationsService = {
     notifyMention,
@@ -109,6 +116,7 @@ describe('MessagesService', () => {
     resolveAttachmentsForMessage,
     linkAttachmentsToMessage,
     hydrateAttachmentResponses,
+    hydrateAttachmentMap,
   } as unknown as AttachmentsService;
   const service = new MessagesService(
     repository,
@@ -130,6 +138,10 @@ describe('MessagesService', () => {
       updatedAt: new Date(),
     } as unknown as import('../rooms/room.repository.interface.js').RoomRecord);
     getDirectRoomPeer.mockResolvedValue(undefined);
+    (roomsService.listMemberUserIds as ReturnType<typeof vi.fn>).mockResolvedValue([
+      USER_ID,
+      OTHER_USER_ID,
+    ]);
     notifyMention.mockResolvedValue(undefined);
     notifyReply.mockResolvedValue(undefined);
     notifyDirectMessage.mockResolvedValue(undefined);
@@ -138,8 +150,9 @@ describe('MessagesService', () => {
     summarizeReactions.mockResolvedValue(new Map());
     findByIds.mockResolvedValue([]);
     hydrateAttachmentResponses.mockResolvedValue([]);
+    hydrateAttachmentMap.mockResolvedValue(new Map());
     resolveAttachmentsForMessage.mockResolvedValue([]);
-    linkAttachmentsToMessage.mockResolvedValue(undefined);
+    linkAttachmentsToMessage.mockResolvedValue(true);
     deleteReaction.mockResolvedValue(false);
   });
 
@@ -216,6 +229,53 @@ describe('MessagesService', () => {
     expect(result.message.content).toBe('First post');
   });
 
+  it('rejects a reply to a soft-deleted message', async () => {
+    findById.mockResolvedValue(message({ deletedAt: new Date('2026-08-18T03:00:00.000Z') }));
+
+    await expect(
+      service.createMessage(USER_ID, ROOM_ID, {
+        content: 'Reply',
+        clientMessageId: 'reply-deleted',
+        replyToMessageId: MESSAGE_ID,
+      }),
+    ).rejects.toMatchObject({
+      code: MESSAGE_ERROR_CODES.MESSAGE_ALREADY_DELETED,
+    });
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  it('rolls back a created message when attachment linking loses a race', async () => {
+    const attachmentId = '507f1f77bcf86cd799439071';
+    findByClientMessageId.mockResolvedValue(null);
+    create.mockResolvedValue(message({ attachments: [{ id: attachmentId }] }));
+    resolveAttachmentsForMessage.mockResolvedValue([
+      {
+        id: attachmentId,
+        roomId: ROOM_ID,
+        uploaderId: USER_ID,
+        storageKey: 'file.png',
+        filename: 'file.png',
+        mimeType: 'image/png',
+        sizeBytes: 12,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      },
+    ]);
+    linkAttachmentsToMessage.mockResolvedValue(false);
+    softDelete.mockResolvedValue(message({ deletedAt: new Date() }));
+
+    await expect(
+      service.createMessage(USER_ID, ROOM_ID, {
+        content: 'With file',
+        clientMessageId: 'attach-race',
+        attachmentIds: [attachmentId],
+      }),
+    ).rejects.toMatchObject({
+      code: ATTACHMENT_ERROR_CODES.ATTACHMENT_ALREADY_LINKED,
+    });
+    expect(softDelete).toHaveBeenCalledWith(MESSAGE_ID, expect.any(Date));
+  });
+
   it('pages newest-first without loading the extra look-ahead row', async () => {
     const newest = message({ id: '507f1f77bcf86cd799439051', content: '3' });
     const middle = message({ id: '507f1f77bcf86cd799439050', content: '2' });
@@ -231,6 +291,9 @@ describe('MessagesService', () => {
     });
     expect(page.items.map((item) => item.id)).toEqual([newest.id, middle.id]);
     expect(page.nextCursor).toBe(middle.id);
+    expect(hydrateAttachmentMap).toHaveBeenCalledTimes(1);
+    expect(hydrateAttachmentMap).toHaveBeenCalledWith([newest, middle]);
+    expect(hydrateAttachmentResponses).not.toHaveBeenCalled();
   });
 
   it('resolves a before cursor to createdAt and id', async () => {
@@ -272,6 +335,28 @@ describe('MessagesService', () => {
 
     expect(findByClientMessageId).toHaveBeenCalledWith(ROOM_ID, OTHER_USER_ID, 'shared-id');
     expect(create).toHaveBeenCalled();
+  });
+
+  it('does not notify mentioned users who are not room members', async () => {
+    const outsiderId = '507f1f77bcf86cd799439099';
+    findByClientMessageId.mockResolvedValue(null);
+    create.mockResolvedValue(message({ content: 'Hey @outsider' }));
+    resolveMentionedUserIds.mockResolvedValue([outsiderId, OTHER_USER_ID]);
+    (roomsService.listMemberUserIds as ReturnType<typeof vi.fn>).mockResolvedValue([
+      USER_ID,
+      OTHER_USER_ID,
+    ]);
+
+    await service.createMessage(USER_ID, ROOM_ID, {
+      content: 'Hey @outsider',
+      clientMessageId: 'mention-scope',
+    });
+
+    await vi.waitFor(() => {
+      expect(notifyMention).toHaveBeenCalledTimes(1);
+    });
+    expect(notifyMention).toHaveBeenCalledWith(USER_ID, OTHER_USER_ID, MESSAGE_ID);
+    expect(notifyMention).not.toHaveBeenCalledWith(USER_ID, outsiderId, MESSAGE_ID);
   });
 
   it('validates a same-room reply target during creation', async () => {
@@ -427,6 +512,7 @@ describe('MessagesService', () => {
   });
 
   it('toggles a reaction on and off for the same user and emoji', async () => {
+    findById.mockClear();
     findById.mockResolvedValue(message());
     findReaction.mockResolvedValueOnce(null).mockResolvedValueOnce({
       id: '507f1f77bcf86cd799439201',
@@ -457,6 +543,7 @@ describe('MessagesService', () => {
       emoji: '👍',
     });
     expect(deleteReaction).toHaveBeenCalledWith(MESSAGE_ID, USER_ID, '👍');
+    expect(findById).toHaveBeenCalledTimes(2);
     expect(added.reactions).toEqual([{ emoji: '👍', count: 1, reactedByCurrentUser: true }]);
     expect(removed.reactions).toEqual([]);
   });

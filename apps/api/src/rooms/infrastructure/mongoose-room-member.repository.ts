@@ -89,6 +89,30 @@ export class MongooseRoomMemberRepository implements RoomMemberRepository {
     return document ? toRoomMemberRecord(document) : null;
   }
 
+  async updateReadState(
+    roomId: string,
+    userId: string,
+    messageId: string,
+  ): Promise<RoomMemberRecord | null> {
+    const document = await this.roomMemberModel
+      .findOneAndUpdate(
+        {
+          roomId: new Types.ObjectId(roomId),
+          userId: new Types.ObjectId(userId),
+        },
+        {
+          $set: {
+            lastReadMessageId: messageId,
+            lastReadAt: new Date(),
+          },
+        },
+        { new: true },
+      )
+      .exec();
+
+    return document ? toRoomMemberRecord(document) : null;
+  }
+
   async deleteByRoomAndUser(roomId: string, userId: string): Promise<boolean> {
     const result = await this.roomMemberModel
       .deleteOne({

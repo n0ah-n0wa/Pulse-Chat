@@ -1,16 +1,37 @@
-import { Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
+import { Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { InjectConnection } from '@nestjs/mongoose';
 import type { Connection } from 'mongoose';
 
-/** Closes the shared Mongoose connection during Nest shutdown. */
-@Injectable()
-export class MongooseConnectionLifecycle implements OnModuleDestroy {
-  private readonly logger = new Logger(MongooseConnectionLifecycle.name);
+import { StructuredLoggerService } from '../logging/structured-logger.service.js';
 
-  constructor(@InjectConnection() private readonly connection: Connection) {}
+/** Binds MongoDB connection diagnostics and closes the client on Nest shutdown. */
+@Injectable()
+export class MongooseConnectionLifecycle implements OnModuleInit, OnModuleDestroy {
+  constructor(
+    @InjectConnection() private readonly connection: Connection,
+    private readonly logger: StructuredLoggerService,
+  ) {}
+
+  onModuleInit(): void {
+    this.connection.on('connected', () => {
+      this.logger.log('mongodb.connected');
+    });
+    this.connection.on('reconnected', () => {
+      this.logger.log('mongodb.reconnected');
+    });
+    this.connection.on('disconnected', () => {
+      this.logger.warn('mongodb.disconnected');
+    });
+    this.connection.on('error', (error: Error) => {
+      this.logger.error('mongodb.error', { error });
+    });
+
+    if (this.connection.db) {
+      this.logger.log('mongodb.connected');
+    }
+  }
 
   async onModuleDestroy(): Promise<void> {
     await this.connection.close();
-    this.logger.log('MongoDB connection closed');
   }
 }

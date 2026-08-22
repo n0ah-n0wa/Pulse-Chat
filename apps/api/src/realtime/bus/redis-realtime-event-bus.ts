@@ -3,6 +3,7 @@ import { Inject, Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/commo
 import { APP_INSTANCE_ID } from '../../config/index.js';
 import { NestStructuredLoggerService } from '../../infrastructure/logging/nest-structured-logger.service.js';
 import type { RedisClient } from '../../infrastructure/redis/redis-client.interface.js';
+import { withRedisRetry } from '../../infrastructure/redis/redis-retry.js';
 import type { RedisSubscriber } from '../../infrastructure/redis/redis-subscriber.interface.js';
 import { REDIS_CLIENT } from '../../infrastructure/tokens.js';
 import { ALL_REALTIME_BUS_CHANNELS, channelForDistributedEvent } from './realtime-bus.channels.js';
@@ -30,6 +31,7 @@ export class RedisRealtimeEventBus
   private subscriber: RedisSubscriber | undefined;
   private handler: RealtimeEventHandler | undefined;
   private subscribedChannels: readonly string[] = ALL_REALTIME_BUS_CHANNELS;
+  private resubscribeTimer: ReturnType<typeof setTimeout> | undefined;
 
   constructor(
     @Inject(REDIS_CLIENT) private readonly redis: RedisClient,
@@ -62,6 +64,11 @@ export class RedisRealtimeEventBus
   }
 
   async onModuleDestroy(): Promise<void> {
+    if (this.resubscribeTimer !== undefined) {
+      clearTimeout(this.resubscribeTimer);
+      this.resubscribeTimer = undefined;
+    }
+
     if (this.subscriber === undefined) {
       return;
     }
@@ -74,7 +81,7 @@ export class RedisRealtimeEventBus
   async publish(event: PublishRealtimeEventInput): Promise<void> {
     const channel = channelForDistributedEvent(event.event);
     const serialized = serializeRealtimeBusEnvelope(event, this.instanceId);
-    await this.redis.publish(channel, serialized);
+    await withRedisRetry(() => this.redis.publish(channel, serialized));
   }
 
   private handleMessage(_channel: string, raw: string): void {
@@ -97,7 +104,13 @@ export class RedisRealtimeEventBus
     }
 
     try {
-      await this.subscriber.subscribe(this.subscribedChannels);
+      await withRedisRetry(() => {
+        if (this.subscriber === undefined) {
+          return Promise.resolve();
+        }
+
+        return this.subscriber.subscribe(this.subscribedChannels);
+      });
       this.logger.log(
         'Realtime event bus resubscribed after reconnect',
         RedisRealtimeEventBus.name,
@@ -108,6 +121,18 @@ export class RedisRealtimeEventBus
         error instanceof Error ? error.stack : undefined,
         RedisRealtimeEventBus.name,
       );
+      this.scheduleResubscribe();
     }
+  }
+
+  private scheduleResubscribe(): void {
+    if (this.resubscribeTimer !== undefined || this.subscriber === undefined) {
+      return;
+    }
+
+    this.resubscribeTimer = setTimeout(() => {
+      this.resubscribeTimer = undefined;
+      void this.resubscribe();
+    }, 2_000);
   }
 }

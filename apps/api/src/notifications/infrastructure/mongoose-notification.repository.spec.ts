@@ -54,6 +54,7 @@ describe('MongooseNotificationRepository', () => {
       JSON.stringify({ userId: 1, type: 1, referenceId: 1, actorId: 1 }),
     );
     expect(keyStrings).toContain(JSON.stringify({ userId: 1, createdAt: -1, _id: -1 }));
+    expect(keyStrings).toContain(JSON.stringify({ userId: 1, isRead: 1 }));
   });
 
   it('creates a new notification record on first call', async () => {

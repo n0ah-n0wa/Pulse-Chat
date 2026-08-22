@@ -7,10 +7,12 @@ import { defineConfig } from 'vitest/config';
 // mount from the host, so the watcher polls instead.
 const inContainer = process.env['PULSE_DEV_CONTAINER'] === 'true';
 
+const apiOrigin = process.env['PULSE_API_ORIGIN'] ?? 'http://127.0.0.1:3000';
+
 export default defineConfig({
   plugins: [react(), tailwindcss()],
   server: {
-    host: inContainer ? '0.0.0.0' : 'localhost',
+    host: inContainer ? '0.0.0.0' : '127.0.0.1',
     port: 5173,
     strictPort: true,
     watch: inContainer ? { usePolling: true, interval: 400 } : undefined,
@@ -19,8 +21,8 @@ export default defineConfig({
     proxy: inContainer
       ? undefined
       : {
-          '/api': { target: 'http://localhost:3000', changeOrigin: true },
-          '/socket.io': { target: 'http://localhost:3000', ws: true, changeOrigin: true },
+          '/api': { target: apiOrigin, changeOrigin: true },
+          '/socket.io': { target: apiOrigin, ws: true, changeOrigin: true },
         },
   },
   build: {

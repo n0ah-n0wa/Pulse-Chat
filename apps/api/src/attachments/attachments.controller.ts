@@ -21,8 +21,12 @@ import { CurrentUser } from '../auth/decorators/current-user.decorator.js';
 import { AuthGuard } from '../auth/guards/auth.guard.js';
 import type { AuthenticatedUser } from '../auth/types/authenticated-request.types.js';
 import { ApiException } from '../common/errors/api.exception.js';
+import { RateLimited } from '../rate-limit/rate-limit.decorator.js';
+import { RATE_LIMIT_ACTIONS } from '../rate-limit/rate-limit.keys.js';
+import { UserRateLimitGuard } from '../rate-limit/user-rate-limit.guard.js';
 import { AttachmentsService } from './attachments.service.js';
 import type { UploadedMultipartFile } from './uploaded-multipart-file.js';
+import { contentDispositionHeader } from './utils/content-disposition-header.js';
 
 const uploadInterceptor = FileInterceptor('file', {
   limits: { fileSize: ATTACHMENT_MAX_BYTES, files: 1 },
@@ -30,13 +34,14 @@ const uploadInterceptor = FileInterceptor('file', {
 
 @ApiTags('attachments')
 @ApiBearerAuth()
-@UseGuards(AuthGuard)
+@UseGuards(AuthGuard, UserRateLimitGuard)
 @Controller('rooms/:roomId/attachments')
 export class RoomAttachmentsController {
   constructor(private readonly attachmentsService: AttachmentsService) {}
 
   @Post()
   @HttpCode(201)
+  @RateLimited(RATE_LIMIT_ACTIONS.UPLOADS)
   @UseInterceptors(uploadInterceptor)
   @ApiConsumes('multipart/form-data')
   @ApiBody({
@@ -102,7 +107,10 @@ export class FilesController {
   ): Promise<void> {
     const readable = await this.attachmentsService.openAttachmentFile(currentUser.userId, key);
     response.setHeader('Content-Type', readable.mimeType);
-    response.setHeader('Content-Disposition', `inline; filename="${readable.filename}"`);
+    response.setHeader(
+      'Content-Disposition',
+      contentDispositionHeader(readable.filename, readable.mimeType),
+    );
     readable.stream.pipe(response);
   }
 }

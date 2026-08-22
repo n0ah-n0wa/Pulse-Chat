@@ -712,6 +712,12 @@ describe('MessagesController', () => {
       .set(bearerAuthorization(owner.accessToken))
       .expect(200);
     expect((removed.body as MessageResponse).reactions).toEqual([]);
+
+    const oversized = await request(httpServer)
+      .delete(`/api/messages/${messageId}/reactions/${'x'.repeat(40)}`)
+      .set(bearerAuthorization(owner.accessToken))
+      .expect(400);
+    expect(oversized.body).toMatchObject({ code: API_ERROR_CODES.VALIDATION_FAILED });
   });
 
   it('prevents unauthorized users from reacting to messages', async () => {
@@ -866,5 +872,40 @@ describe('MessagesController', () => {
       .expect(400);
 
     expect(response.body).toMatchObject({ code: MESSAGE_ERROR_CODES.INVALID_REPLY_REFERENCE });
+  });
+
+  it('rejects replies to a soft-deleted message', async () => {
+    const owner = await registerTestUser(httpServer, { username: 'reply_deleted_owner' });
+
+    const room = await request(httpServer)
+      .post('/api/rooms')
+      .set(bearerAuthorization(owner.accessToken))
+      .send({ type: ROOM_TYPES.PUBLIC, name: 'Deleted reply target' })
+      .expect(201);
+    const roomId = createdId(room.body);
+
+    const original = await request(httpServer)
+      .post(`/api/rooms/${roomId}/messages`)
+      .set(bearerAuthorization(owner.accessToken))
+      .send({ content: 'Soon gone', clientMessageId: 'reply-deleted-origin' })
+      .expect(201);
+    const originalId = createdId(original.body);
+
+    await request(httpServer)
+      .delete(`/api/messages/${originalId}`)
+      .set(bearerAuthorization(owner.accessToken))
+      .expect(204);
+
+    const response = await request(httpServer)
+      .post(`/api/rooms/${roomId}/messages`)
+      .set(bearerAuthorization(owner.accessToken))
+      .send({
+        content: 'Reply after delete',
+        clientMessageId: 'reply-deleted-child',
+        replyToMessageId: originalId,
+      })
+      .expect(409);
+
+    expect(response.body).toMatchObject({ code: MESSAGE_ERROR_CODES.MESSAGE_ALREADY_DELETED });
   });
 });

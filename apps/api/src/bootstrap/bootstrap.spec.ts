@@ -48,6 +48,12 @@ describe('application bootstrap', () => {
     await request(httpServer).get('/health/liveness').expect(200).expect({ status: 'ok' });
   });
 
+  it('identifies the process on every response for multi-instance routing', async () => {
+    const response = await request(httpServer).get('/health/liveness').expect(200);
+
+    expect(response.headers['x-pulse-instance']).toEqual(expect.stringMatching(/^pulse-api-/));
+  });
+
   it('serves readiness with dependency checks', async () => {
     await request(httpServer)
       .get('/health/readiness')
@@ -88,5 +94,12 @@ describe('application bootstrap', () => {
 
     expect(response.status).toBeGreaterThanOrEqual(200);
     expect(response.status).toBeLessThan(400);
+  });
+
+  it('sets baseline security headers', async () => {
+    const response = await request(httpServer).get('/health/liveness').expect(200);
+
+    expect(response.headers['x-content-type-options']).toBe('nosniff');
+    expect(response.headers['x-frame-options']).toBe('SAMEORIGIN');
   });
 });

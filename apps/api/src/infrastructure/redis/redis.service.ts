@@ -3,19 +3,22 @@ import Redis from 'ioredis';
 import { hostname } from 'node:os';
 
 import { AppConfigService } from '../../config/index.js';
-import { NestStructuredLoggerService } from '../logging/nest-structured-logger.service.js';
+import { StructuredLoggerService } from '../logging/structured-logger.service.js';
 import { REDIS_CLIENT, REDIS_HEALTH_PROBE } from '../tokens.js';
-import type { RedisClient, RedisHealthProbe } from './redis-client.interface.js';
+import { INCREMENT_WITH_TTL_LUA, parseIncrementWithTtlResult } from './increment-with-ttl.js';
 import { IoredisSubscriberAdapter } from './ioredis-subscriber.adapter.js';
+import type { RedisClient, RedisHealthProbe } from './redis-client.interface.js';
+import { withRedisRetry } from './redis-retry.js';
 import type { RedisSubscriber } from './redis-subscriber.interface.js';
 
 @Injectable()
 export class RedisService implements RedisClient, RedisHealthProbe, OnModuleInit, OnModuleDestroy {
   private client!: Redis;
+  private shuttingDown = false;
 
   constructor(
     private readonly config: AppConfigService,
-    private readonly logger: NestStructuredLoggerService,
+    private readonly logger: StructuredLoggerService,
   ) {}
 
   async onModuleInit(): Promise<void> {
@@ -23,14 +26,25 @@ export class RedisService implements RedisClient, RedisHealthProbe, OnModuleInit
       maxRetriesPerRequest: 3,
       lazyConnect: true,
       connectionName: `pulse-api-${hostname()}`,
+      retryStrategy: (times: number) => Math.min(times * 200, 3000),
+      reconnectOnError: (error: Error) => {
+        const message = error.message.toUpperCase();
+        return message.includes('READONLY') || message.includes('ETIMEDOUT');
+      },
     });
 
     this.client.on('error', (error: Error) => {
-      this.logger.error('Redis client error', error.stack, RedisService.name);
+      this.logger.error('redis.error', { error });
+    });
+
+    this.client.on('close', () => {
+      if (!this.shuttingDown) {
+        this.logger.warn('redis.disconnected');
+      }
     });
 
     await this.client.connect();
-    this.logger.log('Redis connection established', RedisService.name);
+    this.logger.log('redis.connected');
   }
 
   async onModuleDestroy(): Promise<void> {
@@ -38,8 +52,9 @@ export class RedisService implements RedisClient, RedisHealthProbe, OnModuleInit
       return;
     }
 
+    this.shuttingDown = true;
     await this.client.quit();
-    this.logger.log('Redis connection closed', RedisService.name);
+    this.logger.log('redis.closed');
   }
 
   async check(): Promise<void> {
@@ -47,7 +62,7 @@ export class RedisService implements RedisClient, RedisHealthProbe, OnModuleInit
   }
 
   async ping(): Promise<'PONG'> {
-    const response = await this.client.ping();
+    const response = await this.run(() => this.client.ping());
     if (response !== 'PONG') {
       throw new Error(`Unexpected Redis PING response: ${String(response)}`);
     }
@@ -55,16 +70,16 @@ export class RedisService implements RedisClient, RedisHealthProbe, OnModuleInit
   }
 
   async get(key: string): Promise<string | null> {
-    return this.client.get(key);
+    return this.run(() => this.client.get(key));
   }
 
   async set(key: string, value: string, ttlSeconds?: number): Promise<void> {
     if (ttlSeconds === undefined) {
-      await this.client.set(key, value);
+      await this.run(() => this.client.set(key, value));
       return;
     }
 
-    await this.client.set(key, value, 'EX', ttlSeconds);
+    await this.run(() => this.client.set(key, value, 'EX', ttlSeconds));
   }
 
   async del(...keys: string[]): Promise<number> {
@@ -72,15 +87,15 @@ export class RedisService implements RedisClient, RedisHealthProbe, OnModuleInit
       return 0;
     }
 
-    return this.client.del(...keys);
+    return this.run(() => this.client.del(...keys));
   }
 
   async expire(key: string, ttlSeconds: number): Promise<boolean> {
     if (ttlSeconds <= 0) {
-      return (await this.client.del(key)) > 0;
+      return (await this.del(key)) > 0;
     }
 
-    return (await this.client.expire(key, ttlSeconds)) === 1;
+    return (await this.run(() => this.client.expire(key, ttlSeconds))) === 1;
   }
 
   async exists(...keys: string[]): Promise<number> {
@@ -88,7 +103,15 @@ export class RedisService implements RedisClient, RedisHealthProbe, OnModuleInit
       return 0;
     }
 
-    return this.client.exists(...keys);
+    return this.run(() => this.client.exists(...keys));
+  }
+
+  async mget(...keys: string[]): Promise<(string | null)[]> {
+    if (keys.length === 0) {
+      return [];
+    }
+
+    return this.run(() => this.client.mget(...keys));
   }
 
   async sadd(key: string, ...members: string[]): Promise<number> {
@@ -96,7 +119,7 @@ export class RedisService implements RedisClient, RedisHealthProbe, OnModuleInit
       return 0;
     }
 
-    return this.client.sadd(key, ...members);
+    return this.run(() => this.client.sadd(key, ...members));
   }
 
   async srem(key: string, ...members: string[]): Promise<number> {
@@ -104,15 +127,15 @@ export class RedisService implements RedisClient, RedisHealthProbe, OnModuleInit
       return 0;
     }
 
-    return this.client.srem(key, ...members);
+    return this.run(() => this.client.srem(key, ...members));
   }
 
   async smembers(key: string): Promise<string[]> {
-    return this.client.smembers(key);
+    return this.run(() => this.client.smembers(key));
   }
 
   async scard(key: string): Promise<number> {
-    return this.client.scard(key);
+    return this.run(() => this.client.scard(key));
   }
 
   /**
@@ -120,30 +143,33 @@ export class RedisService implements RedisClient, RedisHealthProbe, OnModuleInit
    * giving a fixed-window rate limit.
    */
   async incrementWithTtl(key: string, ttlSeconds: number): Promise<number> {
-    const count = await this.client.incr(key);
+    const result = await this.run(() =>
+      this.client.eval(INCREMENT_WITH_TTL_LUA, 1, key, String(ttlSeconds)),
+    );
 
-    if (count === 1) {
-      await this.client.expire(key, ttlSeconds);
-    }
-
-    return count;
+    return parseIncrementWithTtlResult(result);
   }
 
   async publish(channel: string, message: string): Promise<number> {
-    return this.client.publish(channel, message);
+    return this.run(() => this.client.publish(channel, message));
   }
 
   createSubscriber(): Promise<RedisSubscriber> {
     const subscriber = this.client.duplicate({
       connectionName: `pulse-api-sub-${hostname()}`,
       lazyConnect: true,
+      retryStrategy: (times: number) => Math.min(times * 200, 3000),
     });
 
     subscriber.on('error', (error: Error) => {
-      this.logger.error('Redis subscriber error', error.stack, RedisService.name);
+      this.logger.error('redis.subscriber_error', { error });
     });
 
     return Promise.resolve(new IoredisSubscriberAdapter(subscriber));
+  }
+
+  private run<T>(operation: () => Promise<T>): Promise<T> {
+    return withRedisRetry(operation);
   }
 }
 

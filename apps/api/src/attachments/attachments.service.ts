@@ -1,4 +1,5 @@
-import { createReadStream } from 'node:fs';
+import { createReadStream, constants as fsConstants } from 'node:fs';
+import { access } from 'node:fs/promises';
 import path from 'node:path';
 
 import { HttpStatus, Inject, Injectable } from '@nestjs/common';
@@ -12,6 +13,7 @@ import {
 import { ApiException } from '../common/errors/api.exception.js';
 import { AppConfigService } from '../config/index.js';
 import { FileUploadService } from '../infrastructure/storage/file-upload.service.js';
+import { assertSafeStorageKey } from '../infrastructure/storage/validation/assert-safe-storage-key.js';
 import { canDeleteMessage } from '../messages/message-permissions.js';
 import type { MessageRepository } from '../messages/message.repository.interface.js';
 import { MESSAGE_REPOSITORY } from '../messages/messages.tokens.js';
@@ -155,12 +157,12 @@ export class AttachmentsService {
   async linkAttachmentsToMessage(
     attachmentIds: readonly string[],
     messageId: string,
-  ): Promise<void> {
+  ): Promise<boolean> {
     if (attachmentIds.length === 0) {
-      return;
+      return true;
     }
 
-    await this.attachments.linkToMessage(attachmentIds, messageId);
+    return this.attachments.linkToMessage(attachmentIds, messageId);
   }
 
   async hydrateAttachmentResponses(
@@ -173,23 +175,66 @@ export class AttachmentsService {
     const records = await this.attachments.findByIds(
       attachmentRefs.map((reference) => reference.id),
     );
-    const recordMap = new Map(records.map((record) => [record.id, record]));
-    const responses: AttachmentResponse[] = [];
+    const responsesById = await this.toAttachmentResponsesById(records);
 
-    for (const reference of attachmentRefs) {
-      const record = recordMap.get(reference.id);
-      if (record === undefined || record.deletedAt !== undefined) {
-        continue;
-      }
+    return attachmentRefs.flatMap((reference) => {
+      const response = responsesById.get(reference.id);
+      return response === undefined ? [] : [response];
+    });
+  }
 
-      const url = await this.fileUploads.getUrl(record.storageKey);
-      responses.push(toAttachmentResponse(record, url));
+  async hydrateAttachmentMap(
+    messages: readonly {
+      readonly id: string;
+      readonly attachments: readonly { readonly id: string }[];
+    }[],
+  ): Promise<Map<string, AttachmentResponse[]>> {
+    const uniqueIds = [
+      ...new Set(
+        messages.flatMap((message) => message.attachments.map((attachment) => attachment.id)),
+      ),
+    ];
+    const records = uniqueIds.length === 0 ? [] : await this.attachments.findByIds(uniqueIds);
+    const responsesById = await this.toAttachmentResponsesById(records);
+    const result = new Map<string, AttachmentResponse[]>();
+
+    for (const message of messages) {
+      result.set(
+        message.id,
+        message.attachments.flatMap((reference) => {
+          const response = responsesById.get(reference.id);
+          return response === undefined ? [] : [response];
+        }),
+      );
     }
 
-    return responses;
+    return result;
+  }
+
+  private async toAttachmentResponsesById(
+    records: readonly AttachmentRecord[],
+  ): Promise<Map<string, AttachmentResponse>> {
+    const live = records.filter((record) => record.deletedAt === undefined);
+    const uniqueKeys = [...new Set(live.map((record) => record.storageKey))];
+    const urls = await Promise.all(uniqueKeys.map((key) => this.fileUploads.getUrl(key)));
+    const urlByKey = new Map(
+      uniqueKeys.flatMap((key, index) => {
+        const url = urls[index];
+        return url === undefined ? [] : [[key, url] as const];
+      }),
+    );
+
+    return new Map(
+      live.flatMap((record) => {
+        const url = urlByKey.get(record.storageKey);
+        return url === undefined ? [] : [[record.id, toAttachmentResponse(record, url)] as const];
+      }),
+    );
   }
 
   async openAttachmentFile(userId: string, storageKey: string): Promise<ReadableAttachmentFile> {
+    assertSafeStorageKey(storageKey);
+
     const attachment = await this.attachments.findByStorageKey(storageKey);
     if (attachment === undefined || attachment === null || attachment.deletedAt !== undefined) {
       throw new ApiException(
@@ -200,6 +245,17 @@ export class AttachmentsService {
     }
 
     await this.roomsService.requireMember(userId, attachment.roomId);
+
+    if (attachment.messageId !== undefined) {
+      const message = await this.messages.findById(attachment.messageId);
+      if (message === null || message.deletedAt !== undefined) {
+        throw new ApiException(
+          ATTACHMENT_ERROR_CODES.FILE_NOT_FOUND,
+          'File not found.',
+          HttpStatus.NOT_FOUND,
+        );
+      }
+    }
 
     if (this.config.fileStorage.provider !== 'local') {
       throw new ApiException(
@@ -214,7 +270,26 @@ export class AttachmentsService {
       throw new Error('FILE_STORAGE_PATH is required for the local storage provider.');
     }
 
-    const absolutePath = path.join(path.resolve(storageRoot), attachment.storageKey);
+    const resolvedRoot = path.resolve(storageRoot);
+    const absolutePath = path.join(resolvedRoot, attachment.storageKey);
+    const relativePath = path.relative(resolvedRoot, absolutePath);
+    if (relativePath.startsWith('..') || path.isAbsolute(relativePath)) {
+      throw new ApiException(
+        ATTACHMENT_ERROR_CODES.INVALID_STORAGE_KEY,
+        'Storage key is invalid.',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+
+    try {
+      await access(absolutePath, fsConstants.R_OK);
+    } catch {
+      throw new ApiException(
+        ATTACHMENT_ERROR_CODES.FILE_NOT_FOUND,
+        'File not found.',
+        HttpStatus.NOT_FOUND,
+      );
+    }
 
     return {
       stream: createReadStream(absolutePath),

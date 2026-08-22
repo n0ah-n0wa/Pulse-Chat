@@ -9,9 +9,27 @@ import { TOKEN_TYPE } from '@pulse-chat/shared';
 import { AppShell } from './AppShell';
 import { GuestRoute } from './GuestRoute';
 import { ProtectedRoute } from './ProtectedRoute';
-import { AppHomePage } from '../pages/AppHomePage';
+import { ChatHomePage } from '../pages/ChatHomePage';
 import { LoginPage } from '../pages/LoginPage';
 import { useAuthStore } from '../store/auth-store';
+
+vi.mock('../services/socket-service', () => ({
+  getSocketService: () => ({
+    acquireConnection: vi.fn(() => () => undefined),
+    acquireRoom: vi.fn(() => () => undefined),
+    connect: vi.fn(),
+    disconnect: vi.fn(),
+    emit: vi.fn(),
+    addServerListener: vi.fn(() => () => undefined),
+    onReconnect: vi.fn(() => () => undefined),
+    getJoinedRoomIds: vi.fn(() => []),
+  }),
+}));
+
+vi.mock('../services/realtime-sync-service', () => ({
+  bindRealtimeQueryClient: vi.fn(),
+  startRealtimeSync: vi.fn(() => () => undefined),
+}));
 
 describe('AppShell logout', () => {
   beforeEach(() => {
@@ -39,7 +57,24 @@ describe('AppShell logout', () => {
 
   it('clears the session and returns to login', async () => {
     const user = userEvent.setup();
-    vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(null, { status: 204 }));
+    vi.spyOn(globalThis, 'fetch').mockImplementation((input: RequestInfo | URL) => {
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+
+      if (url.includes('/api/auth/logout')) {
+        return Promise.resolve(new Response(null, { status: 204 }));
+      }
+
+      if (url.includes('/api/rooms')) {
+        return Promise.resolve(
+          new Response(JSON.stringify([]), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          }),
+        );
+      }
+
+      return Promise.resolve(new Response(null, { status: 204 }));
+    });
 
     const queryClient = new QueryClient({
       defaultOptions: {
@@ -60,7 +95,7 @@ describe('AppShell logout', () => {
           children: [
             {
               element: <ProtectedRoute />,
-              children: [{ path: 'app', element: <AppHomePage /> }],
+              children: [{ path: 'app', element: <ChatHomePage /> }],
             },
             {
               element: <GuestRoute />,

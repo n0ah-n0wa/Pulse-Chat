@@ -23,7 +23,7 @@ import { RealtimeBroadcastModule } from '../realtime/realtime-broadcast.module.j
 @Module({
   imports: [
     AuthModule,
-    RoomsModule,
+    forwardRef(() => RoomsModule),
     NotificationsModule,
     UsersPersistenceModule,
     RealtimeBroadcastModule,

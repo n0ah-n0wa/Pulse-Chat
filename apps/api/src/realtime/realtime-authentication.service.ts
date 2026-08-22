@@ -3,6 +3,7 @@ import { Injectable } from '@nestjs/common';
 import { API_ERROR_CODES, AUTH_ERROR_CODES } from '@pulse-chat/shared';
 
 import { TokenService, TokenVerificationError } from '../auth/token.service.js';
+import { StructuredLoggerService } from '../infrastructure/logging/structured-logger.service.js';
 import type { AuthenticatedSocket, AuthenticatedSocketData } from './realtime.types.js';
 
 export interface SocketAuthenticationErrorPayload {
@@ -12,32 +13,26 @@ export interface SocketAuthenticationErrorPayload {
 
 @Injectable()
 export class RealtimeAuthenticationService {
-  constructor(private readonly tokenService: TokenService) {}
+  constructor(
+    private readonly tokenService: TokenService,
+    private readonly logger: StructuredLoggerService,
+  ) {}
 
-  authenticateSocket(socket: AuthenticatedSocket): AuthenticatedSocketData {
+  authenticateSocket(socket: AuthenticatedSocket, requestId: string): AuthenticatedSocketData {
     const token = this.extractToken(socket);
     if (token === undefined) {
-      throw this.createSocketAuthenticationError(
-        API_ERROR_CODES.UNAUTHORIZED,
-        'Authentication required.',
-      );
+      this.reject('missing_token', API_ERROR_CODES.UNAUTHORIZED, 'Authentication required.');
     }
 
     try {
       const payload = this.tokenService.verifyAccessToken(token);
-      return { userId: payload.sub };
+      return { userId: payload.sub, requestId };
     } catch (error) {
       if (error instanceof TokenVerificationError && error.code === 'TOKEN_EXPIRED') {
-        throw this.createSocketAuthenticationError(
-          AUTH_ERROR_CODES.TOKEN_EXPIRED,
-          'Access token has expired.',
-        );
+        this.reject('token_expired', AUTH_ERROR_CODES.TOKEN_EXPIRED, 'Access token has expired.');
       }
 
-      throw this.createSocketAuthenticationError(
-        API_ERROR_CODES.UNAUTHORIZED,
-        'Authentication required.',
-      );
+      this.reject('invalid_token', API_ERROR_CODES.UNAUTHORIZED, 'Authentication required.');
     }
   }
 
@@ -54,6 +49,11 @@ export class RealtimeAuthenticationService {
     }
 
     return undefined;
+  }
+
+  private reject(reason: string, code: string, message: string): never {
+    this.logger.warn('auth.failure', { reason, code, transport: 'websocket' });
+    throw this.createSocketAuthenticationError(code, message);
   }
 
   private createSocketAuthenticationError(code: string, message: string): Error {

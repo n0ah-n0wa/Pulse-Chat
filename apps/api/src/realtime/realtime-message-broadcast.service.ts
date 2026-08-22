@@ -1,4 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
+import type { Server } from 'socket.io';
 
 import {
   SERVER_SOCKET_EVENTS,
@@ -8,6 +9,8 @@ import {
   type MessageUpdatedEvent,
   type NotificationNewEvent,
   type ReactionChangedEvent,
+  type TypingStartedEvent,
+  type TypingStoppedEvent,
   type UserOfflineEvent,
   type UserOnlineEvent,
 } from '@pulse-chat/shared';
@@ -19,7 +22,8 @@ import type { RealtimeBusEnvelope } from './bus/realtime-bus.envelope.js';
 import { REALTIME_EVENT_PUBLISHER, REALTIME_EVENT_SUBSCRIBER } from './bus/realtime-bus.tokens.js';
 import type { RealtimeEventPublisher } from './bus/realtime-event-publisher.interface.js';
 import type { RealtimeEventSubscriber } from './bus/realtime-event-subscriber.interface.js';
-import type { Server } from 'socket.io';
+import { RealtimeConnectionStateService } from './realtime-connection-state.service.js';
+import type { AuthenticatedSocket } from './realtime.types.js';
 
 @Injectable()
 export class RealtimeMessageBroadcastService implements PresenceNotifier {
@@ -29,6 +33,7 @@ export class RealtimeMessageBroadcastService implements PresenceNotifier {
     @Inject(REALTIME_EVENT_PUBLISHER) private readonly publisher: RealtimeEventPublisher,
     @Inject(REALTIME_EVENT_SUBSCRIBER) subscriber: RealtimeEventSubscriber,
     private readonly logger: NestStructuredLoggerService,
+    private readonly connections: RealtimeConnectionStateService,
   ) {
     subscriber.onEvent((event) => {
       this.applyRemote(event);
@@ -118,6 +123,36 @@ export class RealtimeMessageBroadcastService implements PresenceNotifier {
     });
   }
 
+  broadcastTypingStarted(event: TypingStartedEvent, origin: AuthenticatedSocket): Promise<void> {
+    origin.to(event.roomId).emit(SERVER_SOCKET_EVENTS.TYPING_STARTED, event);
+    return this.publish({
+      event: DISTRIBUTED_REALTIME_EVENTS.TYPING_STARTED,
+      roomId: event.roomId,
+      userId: event.userId,
+      payload: event,
+    });
+  }
+
+  broadcastTypingStopped(event: TypingStoppedEvent, origin: AuthenticatedSocket): Promise<void> {
+    origin.to(event.roomId).emit(SERVER_SOCKET_EVENTS.TYPING_STOPPED, event);
+    return this.publish({
+      event: DISTRIBUTED_REALTIME_EVENTS.TYPING_STOPPED,
+      roomId: event.roomId,
+      userId: event.userId,
+      payload: event,
+    });
+  }
+
+  evictMemberFromRoom(roomId: string, userId: string): Promise<void> {
+    this.evictMemberFromRoomLocal(roomId, userId);
+    return this.publish({
+      event: DISTRIBUTED_REALTIME_EVENTS.MEMBER_REMOVED,
+      roomId,
+      userId,
+      payload: { roomId, userId },
+    });
+  }
+
   private applyRemote(envelope: RealtimeBusEnvelope): void {
     switch (envelope.event) {
       case DISTRIBUTED_REALTIME_EVENTS.MESSAGE_NEW:
@@ -151,9 +186,42 @@ export class RealtimeMessageBroadcastService implements PresenceNotifier {
           .emit(SERVER_SOCKET_EVENTS.NOTIFICATION_NEW, envelope.payload);
         return;
       }
+      case DISTRIBUTED_REALTIME_EVENTS.TYPING_STARTED:
+        this.emitToRoom(envelope.roomId, SERVER_SOCKET_EVENTS.TYPING_STARTED, envelope.payload);
+        return;
+      case DISTRIBUTED_REALTIME_EVENTS.TYPING_STOPPED:
+        this.emitToRoom(envelope.roomId, SERVER_SOCKET_EVENTS.TYPING_STOPPED, envelope.payload);
+        return;
+      case DISTRIBUTED_REALTIME_EVENTS.MEMBER_REMOVED: {
+        if (envelope.roomId === undefined || envelope.userId === undefined) {
+          return;
+        }
+
+        this.evictMemberFromRoomLocal(envelope.roomId, envelope.userId);
+        return;
+      }
       default:
         return;
     }
+  }
+
+  private evictMemberFromRoomLocal(roomId: string, userId: string): void {
+    const server = this.server;
+    if (server === undefined) {
+      return;
+    }
+
+    for (const raw of server.sockets.sockets.values()) {
+      const socket = raw as AuthenticatedSocket;
+      if (socket.data.userId !== userId) {
+        continue;
+      }
+
+      void socket.leave(roomId);
+      socket.emit(SERVER_SOCKET_EVENTS.ROOM_LEFT, { roomId });
+    }
+
+    this.connections.removeRoomSubscriptionsForUser(userId, roomId);
   }
 
   private emitToRoom(roomId: string | undefined, event: string, payload: unknown): void {

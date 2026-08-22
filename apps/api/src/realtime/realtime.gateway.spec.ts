@@ -334,6 +334,216 @@ describe('RealtimeGateway', () => {
       AUTH_ERROR_CODES.TOKEN_EXPIRED,
     );
   });
+
+  it('restores the connection after a transport drop and accepts a re-join', async () => {
+    const owner = await registerTestUser(httpServer, { username: 'ws_reconnect' });
+    const created = await request(httpServer)
+      .post('/api/rooms')
+      .set(bearerAuthorization(owner.accessToken))
+      .send({ type: ROOM_TYPES.PUBLIC, name: 'Reconnect Room' })
+      .expect(201);
+
+    const roomId = (created.body as { id: string }).id;
+    const socket = io(serverUrl, {
+      path: '/socket.io',
+      transports: ['websocket'],
+      autoConnect: false,
+      reconnection: true,
+      reconnectionAttempts: 5,
+      reconnectionDelay: 50,
+      auth: { token: owner.accessToken },
+    });
+
+    try {
+      const firstConnect = waitForConnect(socket);
+      socket.connect();
+      await firstConnect;
+      const staleSocketId = socket.id ?? '';
+
+      const joined = onceRoomJoinedEvent(socket);
+      socket.emit(CLIENT_SOCKET_EVENTS.ROOM_JOIN, { roomId });
+      await joined;
+      expect(connectionState.getRoomSubscriptions(staleSocketId)).toEqual([roomId]);
+
+      const reconnected = new Promise<void>((resolve, reject) => {
+        socket.once('connect', () => resolve());
+        socket.once('connect_error', (error) => reject(error));
+      });
+      socket.io.engine?.close();
+      await reconnected;
+      const liveSocketId = socket.id ?? '';
+
+      expect(liveSocketId).not.toBe(staleSocketId);
+      await waitForCondition(() => !connectionState.hasConnection(staleSocketId));
+      expect(connectionState.hasConnection(liveSocketId)).toBe(true);
+      expect(connectionState.getRoomSubscriptions(staleSocketId)).toEqual([]);
+
+      const rejoined = onceRoomJoinedEvent(socket);
+      socket.emit(CLIENT_SOCKET_EVENTS.ROOM_JOIN, { roomId });
+      await rejoined;
+      expect(connectionState.getRoomSubscriptions(liveSocketId)).toEqual([roomId]);
+    } finally {
+      socket.disconnect();
+      await waitForDisconnect(socket);
+    }
+  });
+
+  it('does not drop a live socket when a stale socket disconnects', async () => {
+    const owner = await registerTestUser(httpServer, { username: 'ws_stale_socket' });
+    const created = await request(httpServer)
+      .post('/api/rooms')
+      .set(bearerAuthorization(owner.accessToken))
+      .send({ type: ROOM_TYPES.PUBLIC, name: 'Stale Socket Room' })
+      .expect(201);
+
+    const roomId = (created.body as { id: string }).id;
+    const stale = await connectSocket(serverUrl, owner.accessToken);
+    const live = await connectSocket(serverUrl, owner.accessToken);
+
+    try {
+      const staleJoined = onceRoomJoinedEvent(stale);
+      stale.emit(CLIENT_SOCKET_EVENTS.ROOM_JOIN, { roomId });
+      await staleJoined;
+
+      const liveJoined = onceRoomJoinedEvent(live);
+      live.emit(CLIENT_SOCKET_EVENTS.ROOM_JOIN, { roomId });
+      await liveJoined;
+
+      const staleId = stale.id ?? '';
+      const liveId = live.id ?? '';
+      expect(connectionState.countConnectionsForUser(owner.userId)).toBe(2);
+
+      stale.disconnect();
+      await waitForDisconnect(stale);
+      await waitForCondition(() => !connectionState.hasConnection(staleId));
+
+      expect(connectionState.hasConnection(liveId)).toBe(true);
+      expect(connectionState.getRoomSubscriptions(liveId)).toEqual([roomId]);
+      expect(connectionState.countConnectionsForUser(owner.userId)).toBe(1);
+    } finally {
+      live.disconnect();
+      await waitForDisconnect(live);
+    }
+  });
+
+  it('pushes an online presence snapshot to a joining socket', async () => {
+    const owner = await registerTestUser(httpServer, { username: 'ws_presence_snap_owner' });
+    const member = await registerTestUser(httpServer, { username: 'ws_presence_snap_member' });
+    const created = await request(httpServer)
+      .post('/api/rooms')
+      .set(bearerAuthorization(owner.accessToken))
+      .send({ type: ROOM_TYPES.PUBLIC, name: 'Presence Snapshot Room' })
+      .expect(201);
+
+    const roomId = (created.body as { id: string }).id;
+    await request(httpServer)
+      .post(`/api/rooms/${roomId}/join`)
+      .set(bearerAuthorization(member.accessToken))
+      .expect(201);
+
+    const ownerSocket = await connectSocket(serverUrl, owner.accessToken);
+    const memberSocket = await connectSocket(serverUrl, member.accessToken);
+
+    try {
+      const ownerJoined = onceRoomJoinedEvent(ownerSocket);
+      ownerSocket.emit(CLIENT_SOCKET_EVENTS.ROOM_JOIN, { roomId });
+      await ownerJoined;
+
+      const presencePromise = new Promise<{ userId: string; lastSeenAt: string }>((resolve) => {
+        memberSocket.once(SERVER_SOCKET_EVENTS.USER_ONLINE, (payload) => {
+          if (payload.userId === owner.userId) {
+            resolve(payload);
+          }
+        });
+      });
+
+      const memberJoined = onceRoomJoinedEvent(memberSocket);
+      memberSocket.emit(CLIENT_SOCKET_EVENTS.ROOM_JOIN, { roomId });
+      await memberJoined;
+
+      const presence = await presencePromise;
+      expect(presence.userId).toBe(owner.userId);
+      expect(presence.lastSeenAt).toBeDefined();
+    } finally {
+      ownerSocket.disconnect();
+      memberSocket.disconnect();
+      await waitForDisconnect(ownerSocket);
+      await waitForDisconnect(memberSocket);
+    }
+  });
+
+  it('relays typing start and stop to other room members only', async () => {
+    const owner = await registerTestUser(httpServer, { username: 'ws_typing_owner' });
+    const member = await registerTestUser(httpServer, { username: 'ws_typing_member' });
+    const created = await request(httpServer)
+      .post('/api/rooms')
+      .set(bearerAuthorization(owner.accessToken))
+      .send({ type: ROOM_TYPES.PUBLIC, name: 'Typing Room' })
+      .expect(201);
+    const roomId = (created.body as { id: string }).id;
+
+    await request(httpServer)
+      .post(`/api/rooms/${roomId}/join`)
+      .set(bearerAuthorization(member.accessToken))
+      .expect(201);
+
+    const typer = await connectSocket(serverUrl, owner.accessToken);
+    const observer = await connectSocket(serverUrl, member.accessToken);
+
+    try {
+      const typerJoined = onceRoomJoinedEvent(typer);
+      typer.emit(CLIENT_SOCKET_EVENTS.ROOM_JOIN, { roomId });
+      await typerJoined;
+
+      const observerJoined = onceRoomJoinedEvent(observer);
+      observer.emit(CLIENT_SOCKET_EVENTS.ROOM_JOIN, { roomId });
+      await observerJoined;
+
+      const started = new Promise<{ roomId: string; userId: string }>((resolve) => {
+        observer.once(SERVER_SOCKET_EVENTS.TYPING_STARTED, (payload) => resolve(payload));
+      });
+      let typerSawOwnStart = false;
+      typer.once(SERVER_SOCKET_EVENTS.TYPING_STARTED, () => {
+        typerSawOwnStart = true;
+      });
+
+      typer.emit(CLIENT_SOCKET_EVENTS.TYPING_START, { roomId });
+      await expect(started).resolves.toEqual({ roomId, userId: owner.userId });
+
+      const stopped = new Promise<{ roomId: string; userId: string }>((resolve) => {
+        observer.once(SERVER_SOCKET_EVENTS.TYPING_STOPPED, (payload) => resolve(payload));
+      });
+      typer.emit(CLIENT_SOCKET_EVENTS.TYPING_STOP, { roomId });
+      await expect(stopped).resolves.toEqual({ roomId, userId: owner.userId });
+      expect(typerSawOwnStart).toBe(false);
+    } finally {
+      typer.disconnect();
+      observer.disconnect();
+      await waitForDisconnect(typer);
+      await waitForDisconnect(observer);
+    }
+  });
+
+  it('rejects typing events from users who are not room members', async () => {
+    const owner = await registerTestUser(httpServer, { username: 'ws_typing_auth_owner' });
+    const outsider = await registerTestUser(httpServer, { username: 'ws_typing_auth_out' });
+    const created = await request(httpServer)
+      .post('/api/rooms')
+      .set(bearerAuthorization(owner.accessToken))
+      .send({ type: ROOM_TYPES.PUBLIC, name: 'Typing Auth' })
+      .expect(201);
+    const roomId = (created.body as { id: string }).id;
+
+    const socket = await connectSocket(serverUrl, outsider.accessToken);
+    try {
+      const errorPromise = onceSocketErrorEvent(socket);
+      socket.emit(CLIENT_SOCKET_EVENTS.TYPING_START, { roomId });
+      await expect(errorPromise).resolves.toMatchObject({ code: ROOM_ERROR_CODES.NOT_A_MEMBER });
+    } finally {
+      socket.disconnect();
+      await waitForDisconnect(socket);
+    }
+  });
 });
 
 function createSocket(
@@ -345,6 +555,17 @@ function createSocket(
     transports: ['websocket'],
     autoConnect: false,
     ...(token !== undefined ? { auth: { token } } : {}),
+  });
+}
+
+function waitForConnect(socket: Socket<ServerToClientEvents, ClientToServerEvents>): Promise<void> {
+  if (socket.connected) {
+    return Promise.resolve();
+  }
+
+  return new Promise((resolve, reject) => {
+    socket.once('connect', () => resolve());
+    socket.once('connect_error', (error) => reject(error));
   });
 }
 

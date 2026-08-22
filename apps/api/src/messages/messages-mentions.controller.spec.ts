@@ -74,14 +74,7 @@ describe('Message @username mentions', () => {
       })
       .expect(201);
 
-    await delay(300);
-
-    const response = await request(httpServer)
-      .get('/api/notifications')
-      .set(bearerAuthorization(target.accessToken))
-      .expect(200);
-
-    const items = (response.body as { items: unknown[] }).items;
+    const items = await waitForNotifications(httpServer, target.accessToken, 1);
     expect(items).toHaveLength(1);
     expect(items[0]).toMatchObject({
       type: NOTIFICATION_TYPES.MENTION,
@@ -114,15 +107,9 @@ describe('Message @username mentions', () => {
         clientMessageId: 'ws-multi-mention',
       });
       await onceMessageNewEvent(socket);
-      await delay(300);
 
       for (const recipient of [alice, bob]) {
-        const response = await request(httpServer)
-          .get('/api/notifications')
-          .set(bearerAuthorization(recipient.accessToken))
-          .expect(200);
-
-        expect((response.body as { items: unknown[] }).items).toHaveLength(1);
+        expect(await waitForNotifications(httpServer, recipient.accessToken, 1)).toHaveLength(1);
       }
     } finally {
       socket.disconnect();
@@ -172,14 +159,7 @@ describe('Message @username mentions', () => {
       })
       .expect(201);
 
-    await delay(300);
-
-    const response = await request(httpServer)
-      .get('/api/notifications')
-      .set(bearerAuthorization(target.accessToken))
-      .expect(200);
-
-    expect((response.body as { items: unknown[] }).items).toHaveLength(1);
+    expect(await waitForNotifications(httpServer, target.accessToken, 1)).toHaveLength(1);
   });
 
   it('does not create a mention notification when the author mentions themselves', async () => {
@@ -261,14 +241,7 @@ describe('Message @username mentions', () => {
       .send(payload)
       .expect(201);
 
-    await delay(300);
-
-    const response = await request(httpServer)
-      .get('/api/notifications')
-      .set(bearerAuthorization(target.accessToken))
-      .expect(200);
-
-    expect((response.body as { items: unknown[] }).items).toHaveLength(1);
+    expect(await waitForNotifications(httpServer, target.accessToken, 1)).toHaveLength(1);
   });
 
   it('does not treat email addresses as mentions', async () => {
@@ -293,6 +266,35 @@ describe('Message @username mentions', () => {
     const response = await request(httpServer)
       .get('/api/notifications')
       .set(bearerAuthorization(author.accessToken))
+      .expect(200);
+
+    expect((response.body as { items: unknown[] }).items).toHaveLength(0);
+  });
+
+  it('does not notify users mentioned in a room they cannot access', async () => {
+    const author = await registerTestUser(httpServer, { username: 'mention_priv_author' });
+    const outsider = await registerTestUser(httpServer, { username: 'mention_priv_out' });
+    const created = await request(httpServer)
+      .post('/api/rooms')
+      .set(bearerAuthorization(author.accessToken))
+      .send({ type: ROOM_TYPES.PRIVATE, name: 'Secret mentions' })
+      .expect(201);
+    const roomId = (created.body as { id: string }).id;
+
+    await request(httpServer)
+      .post(`/api/rooms/${roomId}/messages`)
+      .set(bearerAuthorization(author.accessToken))
+      .send({
+        content: 'Secret for @mention_priv_out',
+        clientMessageId: 'priv-mention-1',
+      })
+      .expect(201);
+
+    await delay(300);
+
+    const response = await request(httpServer)
+      .get('/api/notifications')
+      .set(bearerAuthorization(outsider.accessToken))
       .expect(200);
 
     expect((response.body as { items: unknown[] }).items).toHaveLength(0);
@@ -373,4 +375,29 @@ function waitForDisconnect(
 
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/** Poll until fire-and-forget notification writes are visible over REST. */
+async function waitForNotifications(
+  httpServer: HttpServer,
+  accessToken: string,
+  expectedCount: number,
+  timeoutMs = 5_000,
+): Promise<unknown[]> {
+  const deadline = Date.now() + timeoutMs;
+  let items: unknown[] = [];
+
+  while (Date.now() < deadline) {
+    const response = await request(httpServer)
+      .get('/api/notifications')
+      .set(bearerAuthorization(accessToken))
+      .expect(200);
+    items = (response.body as { items: unknown[] }).items;
+    if (items.length >= expectedCount) {
+      return items;
+    }
+    await delay(50);
+  }
+
+  return items;
 }

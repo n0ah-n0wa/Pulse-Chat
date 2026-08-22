@@ -25,6 +25,9 @@ describe('updateUserProfileSchema', () => {
     expect(updateUserProfileSchema.parse({ displayName: 'Alex' })).toEqual({
       displayName: 'Alex',
     });
+    expect(updateUserProfileSchema.parse({ username: 'new_name' })).toEqual({
+      username: 'new_name',
+    });
     expect(updateUserProfileSchema.parse({ bio: 'Hello there' })).toEqual({
       bio: 'Hello there',
     });

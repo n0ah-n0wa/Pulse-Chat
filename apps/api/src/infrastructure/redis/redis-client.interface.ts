@@ -14,6 +14,7 @@ export interface RedisClient {
   del(...keys: string[]): Promise<number>;
   expire(key: string, ttlSeconds: number): Promise<boolean>;
   exists(...keys: string[]): Promise<number>;
+  mget(...keys: string[]): Promise<(string | null)[]>;
   sadd(key: string, ...members: string[]): Promise<number>;
   srem(key: string, ...members: string[]): Promise<number>;
   smembers(key: string): Promise<string[]>;

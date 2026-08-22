@@ -46,6 +46,7 @@ export class AuthController {
 
   @Post('refresh')
   @HttpCode(200)
+  @UseGuards(AuthRateLimitGuard)
   @ApiOperation({ summary: 'Rotate refresh token and issue a new access token' })
   refresh(
     @Body(new ZodValidationPipe(refreshTokenRequestSchema)) body: RefreshTokenInput,
@@ -55,6 +56,7 @@ export class AuthController {
 
   @Post('logout')
   @HttpCode(204)
+  @UseGuards(AuthRateLimitGuard)
   @ApiOperation({ summary: 'Revoke a refresh token' })
   async logout(@Body(new ZodValidationPipe(logoutRequestSchema)) body: LogoutInput): Promise<void> {
     await this.authService.logout(body.refreshToken);

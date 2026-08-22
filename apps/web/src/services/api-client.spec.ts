@@ -66,5 +66,64 @@ describe('apiClient', () => {
         message: 'Invalid credentials.',
       }),
     );
+    expect(useAuthStore.getState().accessToken).toBeNull();
+  });
+
+  it('does not rotate tokens for credential endpoints', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          statusCode: 401,
+          code: API_ERROR_CODES.UNAUTHORIZED,
+          message: 'Invalid credentials.',
+        }),
+        {
+          status: 401,
+          headers: { 'Content-Type': 'application/json' },
+        },
+      ),
+    );
+
+    await expect(
+      apiClient.post('/api/auth/login', { email: 'a@example.com', password: 'secret' }),
+    ).rejects.toMatchObject({ statusCode: 401 });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(useAuthStore.getState().accessToken).toBe('access-token');
+  });
+
+  it('retries the original request after a successful token refresh', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch');
+    fetchMock
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            statusCode: 401,
+            code: API_ERROR_CODES.UNAUTHORIZED,
+            message: 'Expired.',
+          }),
+          { status: 401, headers: { 'Content-Type': 'application/json' } },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            accessToken: 'next-access',
+            refreshToken: 'next-refresh',
+            accessTokenExpiresIn: 900,
+            tokenType: 'Bearer',
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ id: 'me' }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        }),
+      );
+
+    await expect(apiClient.get('/api/users/me')).resolves.toEqual({ id: 'me' });
+    expect(useAuthStore.getState().accessToken).toBe('next-access');
+    expect(useAuthStore.getState().refreshToken).toBe('next-refresh');
   });
 });

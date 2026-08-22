@@ -1,7 +1,8 @@
-import { forwardRef, HttpStatus, Inject, Injectable } from '@nestjs/common';
+import { HttpStatus, Inject, Injectable, Logger, forwardRef } from '@nestjs/common';
 
 import {
   API_ERROR_CODES,
+  ATTACHMENT_ERROR_CODES,
   MESSAGE_ERROR_CODES,
   MESSAGE_PAGE_SIZE_DEFAULT,
   ROOM_ERROR_CODES,
@@ -15,7 +16,6 @@ import {
   type MessageSearchListResponse,
   type SearchMessagesQuery,
   type UpdateMessageInput,
-  type AttachmentResponse,
 } from '@pulse-chat/shared';
 
 import { ApiException } from '../common/errors/api.exception.js';
@@ -42,6 +42,8 @@ import { sanitizeTextSearchQuery } from './utils/sanitize-text-search-query.js';
 
 @Injectable()
 export class MessagesService {
+  private readonly logger = new Logger(MessagesService.name);
+
   constructor(
     @Inject(MESSAGE_REPOSITORY) private readonly messages: MessageRepository,
     @Inject(MESSAGE_REACTION_REPOSITORY) private readonly reactions: MessageReactionRepository,
@@ -75,7 +77,7 @@ export class MessagesService {
       userId,
     );
     const replyMap = await this.loadReplyMap(page);
-    const attachmentMap = await this.loadAttachmentMap(page);
+    const attachmentMap = await this.attachmentsService.hydrateAttachmentMap(page);
 
     return toMessageListResponse(page, hasMore, reactionMap, replyMap, attachmentMap);
   }
@@ -151,10 +153,18 @@ export class MessagesService {
         attachmentIds: attachmentRecords.map((attachment) => attachment.id),
       });
 
-      await this.attachmentsService.linkAttachmentsToMessage(
+      const linked = await this.attachmentsService.linkAttachmentsToMessage(
         attachmentRecords.map((attachment) => attachment.id),
         created.id,
       );
+      if (!linked) {
+        await this.messages.softDelete(created.id, new Date());
+        throw new ApiException(
+          ATTACHMENT_ERROR_CODES.ATTACHMENT_ALREADY_LINKED,
+          'Attachment is already linked to a message.',
+          HttpStatus.CONFLICT,
+        );
+      }
 
       // Fire-and-forget notifications (failures should not block the response).
       void this.dispatchNotifications(userId, created, replyToMessage, room.type);
@@ -243,8 +253,7 @@ export class MessagesService {
       await this.reactions.deleteByMessageUserAndEmoji(message.id, userId, emoji);
     }
 
-    const reloaded = await this.requireMessage(message.id);
-    return this.toHydratedMessageResponse(reloaded, userId);
+    return this.toHydratedMessageResponse(message, userId);
   }
 
   async removeReaction(userId: string, messageId: string, emoji: string): Promise<MessageResponse> {
@@ -254,8 +263,7 @@ export class MessagesService {
 
     await this.reactions.deleteByMessageUserAndEmoji(message.id, userId, emoji.trim());
 
-    const reloaded = await this.requireMessage(message.id);
-    return this.toHydratedMessageResponse(reloaded, userId);
+    return this.toHydratedMessageResponse(message, userId);
   }
 
   private async requireMessage(messageId: string): Promise<MessageRecord> {
@@ -287,22 +295,6 @@ export class MessagesService {
         message.replyToMessageId === undefined ? undefined : replyMap.get(message.replyToMessageId),
       attachments,
     });
-  }
-
-  private async loadAttachmentMap(
-    messages: readonly MessageRecord[],
-  ): Promise<Map<string, AttachmentResponse[]>> {
-    const entries = await Promise.all(
-      messages.map(
-        async (message) =>
-          [
-            message.id,
-            await this.attachmentsService.hydrateAttachmentResponses(message.attachments),
-          ] as const,
-      ),
-    );
-
-    return new Map(entries);
   }
 
   private async loadReplyMap(
@@ -347,6 +339,8 @@ export class MessagesService {
         HttpStatus.BAD_REQUEST,
       );
     }
+
+    this.rejectIfDeleted(replyMessage);
 
     return replyMessage;
   }
@@ -411,14 +405,16 @@ export class MessagesService {
     try {
       // Mention notifications for @username tokens resolved through the user store.
       const mentionedIds = await this.mentionResolver.resolveMentionedUserIds(message.content);
+      const memberIds = new Set(await this.roomsService.listMemberUserIds(message.roomId));
       await Promise.all(
-        mentionedIds.map((recipientId) =>
-          this.notificationsService.notifyMention(authorId, recipientId, message.id),
-        ),
+        mentionedIds
+          .filter((recipientId) => memberIds.has(recipientId))
+          .map((recipientId) =>
+            this.notificationsService.notifyMention(authorId, recipientId, message.id),
+          ),
       );
 
-      // Reply notification to the original author.
-      if (replyTarget !== undefined) {
+      if (replyTarget !== undefined && memberIds.has(replyTarget.authorId)) {
         await this.notificationsService.notifyReply(authorId, replyTarget.authorId, message.id);
       }
 
@@ -429,8 +425,12 @@ export class MessagesService {
           await this.notificationsService.notifyDirectMessage(authorId, peerId, message.id);
         }
       }
-    } catch {
-      // Intentionally swallowed — notifications are best-effort.
+    } catch (error: unknown) {
+      this.logger.warn(
+        `Failed to dispatch message notifications: ${
+          error instanceof Error ? error.message : 'unknown error'
+        }`,
+      );
     }
   }
 }

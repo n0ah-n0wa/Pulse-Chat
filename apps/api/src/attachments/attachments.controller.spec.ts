@@ -1,7 +1,7 @@
 import { Test, type TestingModule } from '@nestjs/testing';
 import type { INestApplication } from '@nestjs/common';
 import type { NestExpressApplication } from '@nestjs/platform-express';
-import { mkdtemp } from 'node:fs/promises';
+import { mkdtemp, unlink } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import type { Server } from 'node:http';
@@ -216,6 +216,193 @@ describe('Message attachments integration', () => {
 
     const items = (history.body as { items: MessageResponse[] }).items;
     expect(items[0]?.attachments).toHaveLength(2);
+  });
+
+  it('refuses file downloads to users who are not room members', async () => {
+    const member = await registerTestUser(httpServer, { username: 'attach_dl_member' });
+    const outsider = await registerTestUser(httpServer, { username: 'attach_dl_out' });
+    const roomId = await createRoom(member.accessToken, 'Private download');
+
+    const uploaded = await request(httpServer)
+      .post(`/api/rooms/${roomId}/attachments`)
+      .set(bearerAuthorization(member.accessToken))
+      .attach('file', PNG_BUFFER, 'secret.png')
+      .expect(201);
+
+    const attachment = uploaded.body as AttachmentResponse;
+    const key = attachment.url.split('/').at(-1);
+    expect(key).toEqual(expect.any(String));
+
+    const denied = await request(httpServer)
+      .get(`/api/files/${key ?? ''}`)
+      .set(bearerAuthorization(outsider.accessToken))
+      .expect(403);
+
+    expect(denied.body).toMatchObject({ code: ROOM_ERROR_CODES.NOT_A_MEMBER });
+
+    const invalid = await request(httpServer)
+      .get(`/api/files/${encodeURIComponent('../secret.png')}`)
+      .set(bearerAuthorization(member.accessToken))
+      .expect(400);
+
+    expect(invalid.body).toMatchObject({ code: ATTACHMENT_ERROR_CODES.INVALID_STORAGE_KEY });
+
+    const allowed = await request(httpServer)
+      .get(`/api/files/${key ?? ''}`)
+      .set(bearerAuthorization(member.accessToken))
+      .expect(200);
+
+    expect(allowed.headers['content-type']).toMatch(/image\/png/);
+    expect(allowed.headers['content-disposition']).toMatch(/inline;/);
+  });
+
+  it('revokes file access after the downloader leaves the room', async () => {
+    const owner = await registerTestUser(httpServer, { username: 'attach_leave_owner' });
+    const member = await registerTestUser(httpServer, { username: 'attach_leave_member' });
+    const roomId = await createRoom(owner.accessToken, 'Leave download');
+
+    await request(httpServer)
+      .post(`/api/rooms/${roomId}/join`)
+      .set(bearerAuthorization(member.accessToken))
+      .expect(201);
+
+    const uploaded = await request(httpServer)
+      .post(`/api/rooms/${roomId}/attachments`)
+      .set(bearerAuthorization(owner.accessToken))
+      .attach('file', PNG_BUFFER, 'shared.png')
+      .expect(201);
+
+    const key = (uploaded.body as AttachmentResponse).url.split('/').at(-1);
+
+    await request(httpServer)
+      .get(`/api/files/${key ?? ''}`)
+      .set(bearerAuthorization(member.accessToken))
+      .expect(200);
+
+    await request(httpServer)
+      .post(`/api/rooms/${roomId}/leave`)
+      .set(bearerAuthorization(member.accessToken))
+      .expect(204);
+
+    const denied = await request(httpServer)
+      .get(`/api/files/${key ?? ''}`)
+      .set(bearerAuthorization(member.accessToken))
+      .expect(403);
+
+    expect(denied.body).toMatchObject({ code: ROOM_ERROR_CODES.NOT_A_MEMBER });
+  });
+
+  it('refuses downloads of attachments whose parent message was deleted', async () => {
+    const member = await registerTestUser(httpServer, { username: 'attach_deleted_msg' });
+    const roomId = await createRoom(member.accessToken, 'Deleted message file');
+
+    const uploaded = await request(httpServer)
+      .post(`/api/rooms/${roomId}/attachments`)
+      .set(bearerAuthorization(member.accessToken))
+      .attach('file', PNG_BUFFER, 'gone.png')
+      .expect(201);
+
+    const attachment = uploaded.body as AttachmentResponse;
+    const key = attachment.url.split('/').at(-1);
+
+    const created = await request(httpServer)
+      .post(`/api/rooms/${roomId}/messages`)
+      .set(bearerAuthorization(member.accessToken))
+      .send({
+        content: 'With file',
+        clientMessageId: 'msg-then-delete',
+        attachmentIds: [attachment.id],
+      })
+      .expect(201);
+
+    await request(httpServer)
+      .get(`/api/files/${key ?? ''}`)
+      .set(bearerAuthorization(member.accessToken))
+      .expect(200);
+
+    await request(httpServer)
+      .delete(`/api/messages/${createdId(created.body)}`)
+      .set(bearerAuthorization(member.accessToken))
+      .expect(204);
+
+    const denied = await request(httpServer)
+      .get(`/api/files/${key ?? ''}`)
+      .set(bearerAuthorization(member.accessToken))
+      .expect(404);
+
+    expect(denied.body).toMatchObject({ code: ATTACHMENT_ERROR_CODES.FILE_NOT_FOUND });
+  });
+
+  it('lets only one concurrent message claim the same attachment', async () => {
+    const member = await registerTestUser(httpServer, { username: 'attach_race' });
+    const roomId = await createRoom(member.accessToken, 'Attachment race');
+
+    const uploaded = await request(httpServer)
+      .post(`/api/rooms/${roomId}/attachments`)
+      .set(bearerAuthorization(member.accessToken))
+      .attach('file', PNG_BUFFER, 'race.png')
+      .expect(201);
+
+    const attachmentId = (uploaded.body as AttachmentResponse).id;
+
+    const [first, second] = await Promise.all([
+      request(httpServer)
+        .post(`/api/rooms/${roomId}/messages`)
+        .set(bearerAuthorization(member.accessToken))
+        .send({
+          content: 'First claim',
+          clientMessageId: 'race-a',
+          attachmentIds: [attachmentId],
+        }),
+      request(httpServer)
+        .post(`/api/rooms/${roomId}/messages`)
+        .set(bearerAuthorization(member.accessToken))
+        .send({
+          content: 'Second claim',
+          clientMessageId: 'race-b',
+          attachmentIds: [attachmentId],
+        }),
+    ]);
+
+    const statuses = [first.status, second.status].sort((left, right) => left - right);
+    expect(statuses).toEqual([201, 409]);
+
+    const conflict = first.status === 409 ? first : second;
+    expect(conflict.body).toMatchObject({ code: ATTACHMENT_ERROR_CODES.ATTACHMENT_ALREADY_LINKED });
+
+    const history = await request(httpServer)
+      .get(`/api/rooms/${roomId}/messages`)
+      .set(bearerAuthorization(member.accessToken))
+      .expect(200);
+
+    const withFile = (history.body as { items: MessageResponse[] }).items.filter((item) =>
+      item.attachments.some((attachment) => attachment.id === attachmentId),
+    );
+    expect(withFile).toHaveLength(1);
+  });
+
+  it('returns not found when the stored file is missing from disk', async () => {
+    const member = await registerTestUser(httpServer, { username: 'attach_missing_disk' });
+    const roomId = await createRoom(member.accessToken, 'Missing disk file');
+
+    const uploaded = await request(httpServer)
+      .post(`/api/rooms/${roomId}/attachments`)
+      .set(bearerAuthorization(member.accessToken))
+      .attach('file', PNG_BUFFER, 'missing.png')
+      .expect(201);
+
+    const attachment = uploaded.body as AttachmentResponse;
+    const key = attachment.url.split('/').at(-1);
+    expect(key).toEqual(expect.any(String));
+
+    await unlink(path.join(storageDir, key ?? ''));
+
+    const denied = await request(httpServer)
+      .get(`/api/files/${key ?? ''}`)
+      .set(bearerAuthorization(member.accessToken))
+      .expect(404);
+
+    expect(denied.body).toMatchObject({ code: ATTACHMENT_ERROR_CODES.FILE_NOT_FOUND });
   });
 
   it('rejects message creation without a file field', async () => {

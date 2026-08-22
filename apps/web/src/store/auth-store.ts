@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
-import type { AuthSessionResponse } from '@pulse-chat/shared';
+import type { AuthSessionResponse, AuthTokensResponse } from '@pulse-chat/shared';
 
 import type { AuthSession } from '../types/index.js';
 
@@ -10,6 +10,8 @@ interface AuthState {
   readonly refreshToken: string | null;
   readonly user: AuthSession['user'] | null;
   readonly setSession: (session: AuthSessionResponse) => void;
+  readonly applyTokens: (tokens: AuthTokensResponse) => void;
+  readonly updateUser: (user: AuthSession['user']) => void;
   readonly clearSession: () => void;
   readonly isAuthenticated: () => boolean;
 }
@@ -30,6 +32,15 @@ export const useAuthStore = create<AuthState>()(
           refreshToken: session.refreshToken,
           user: session.user,
         });
+      },
+      applyTokens: (tokens) => {
+        set({
+          accessToken: tokens.accessToken,
+          refreshToken: tokens.refreshToken,
+        });
+      },
+      updateUser: (user) => {
+        set({ user });
       },
       clearSession: () => {
         set(initialState);

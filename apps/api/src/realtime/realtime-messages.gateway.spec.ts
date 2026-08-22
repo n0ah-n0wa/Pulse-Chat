@@ -18,6 +18,7 @@ import {
   type MessageDeletedEvent,
   type MessageNewEvent,
   type MessageUpdatedEvent,
+  type ReactionChangedEvent,
   type ServerToClientEvents,
 } from '@pulse-chat/shared';
 
@@ -397,6 +398,113 @@ describe('Realtime messaging', () => {
       await waitForDisconnect(socket);
     }
   });
+
+  it('broadcasts reaction:added and reaction:removed to subscribed clients', async () => {
+    const owner = await registerTestUser(httpServer, { username: 'rt_react_owner' });
+    const member = await registerTestUser(httpServer, { username: 'rt_react_member' });
+    const roomId = await createPublicRoom(httpServer, owner.accessToken, 'Reaction Room');
+
+    await request(httpServer)
+      .post(`/api/rooms/${roomId}/join`)
+      .set(bearerAuthorization(member.accessToken))
+      .expect(201);
+
+    const created = await request(httpServer)
+      .post(`/api/rooms/${roomId}/messages`)
+      .set(bearerAuthorization(owner.accessToken))
+      .send({ content: 'React to this', clientMessageId: 'rt-react-1' })
+      .expect(201);
+    const messageId = (created.body as { id: string }).id;
+
+    const observer = await connectSocket(serverUrl, member.accessToken);
+    try {
+      await joinRoom(observer, roomId);
+
+      const added = new Promise<ReactionChangedEvent>((resolve) => {
+        observer.once(SERVER_SOCKET_EVENTS.REACTION_ADDED, (payload) => resolve(payload));
+      });
+
+      await request(httpServer)
+        .post(`/api/messages/${messageId}/reactions`)
+        .set(bearerAuthorization(owner.accessToken))
+        .send({ emoji: '👍' })
+        .expect(201);
+
+      const addedEvent = await added;
+      expect(addedEvent).toMatchObject({
+        roomId,
+        emoji: '👍',
+        userId: owner.userId,
+      });
+      expect(addedEvent.message.reactions).toEqual(
+        expect.arrayContaining([expect.objectContaining({ emoji: '👍', count: 1 })]),
+      );
+
+      const removed = new Promise<ReactionChangedEvent>((resolve) => {
+        observer.once(SERVER_SOCKET_EVENTS.REACTION_REMOVED, (payload) => resolve(payload));
+      });
+
+      await request(httpServer)
+        .post(`/api/messages/${messageId}/reactions`)
+        .set(bearerAuthorization(owner.accessToken))
+        .send({ emoji: '👍' })
+        .expect(201);
+
+      const removedEvent = await removed;
+      expect(removedEvent.emoji).toBe('👍');
+      expect(removedEvent.message.reactions).toEqual([]);
+    } finally {
+      observer.disconnect();
+      await waitForDisconnect(observer);
+    }
+  });
+
+  it('stops delivering room events after a member is removed', async () => {
+    const owner = await registerTestUser(httpServer, { username: 'rt_kick_owner' });
+    const member = await registerTestUser(httpServer, { username: 'rt_kick_member' });
+    const roomId = await createPublicRoom(httpServer, owner.accessToken, 'Kick Room');
+
+    await request(httpServer)
+      .post(`/api/rooms/${roomId}/join`)
+      .set(bearerAuthorization(member.accessToken))
+      .expect(201);
+
+    const sender = await connectSocket(serverUrl, owner.accessToken);
+    const kicked = await connectSocket(serverUrl, member.accessToken);
+
+    try {
+      await joinRoom(sender, roomId);
+      await joinRoom(kicked, roomId);
+
+      const leftPromise = onceRoomLeftEvent(kicked);
+      await request(httpServer)
+        .delete(`/api/rooms/${roomId}/members/${member.userId}`)
+        .set(bearerAuthorization(owner.accessToken))
+        .expect(204);
+
+      await expect(leftPromise).resolves.toMatchObject({ roomId });
+
+      let received = false;
+      kicked.on(SERVER_SOCKET_EVENTS.MESSAGE_NEW, () => {
+        received = true;
+      });
+
+      sender.emit(CLIENT_SOCKET_EVENTS.MESSAGE_SEND, {
+        roomId,
+        content: 'After kick',
+        clientMessageId: 'client-kick-1',
+      });
+
+      await onceMessageNewEvent(sender);
+      await delay(150);
+      expect(received).toBe(false);
+    } finally {
+      sender.disconnect();
+      kicked.disconnect();
+      await waitForDisconnect(sender);
+      await waitForDisconnect(kicked);
+    }
+  });
 });
 
 async function createPublicRoom(
@@ -492,6 +600,14 @@ function onceMessageDeletedEvent(
     socket.once(SERVER_SOCKET_EVENTS.MESSAGE_DELETED, (payload: MessageDeletedEvent) =>
       resolve(payload),
     );
+  });
+}
+
+function onceRoomLeftEvent(
+  socket: Socket<ServerToClientEvents, ClientToServerEvents>,
+): Promise<{ roomId: string }> {
+  return new Promise((resolve) => {
+    socket.once(SERVER_SOCKET_EVENTS.ROOM_LEFT, (payload) => resolve(payload));
   });
 }
 

@@ -36,4 +36,12 @@ export type RoomJoinEventInput = z.infer<typeof roomJoinEventSchema>;
 export type RoomLeaveEventInput = z.infer<typeof roomLeaveEventSchema>;
 export type MessageSendEventInput = z.infer<typeof messageSendEventSchema>;
 
+export const typingRoomEventSchema = z
+  .object({
+    roomId: roomResourceIdSchema,
+  })
+  .strict();
+
+export type TypingRoomEventInput = z.infer<typeof typingRoomEventSchema>;
+
 export { messageResourceIdSchema, clientMessageIdSchema };

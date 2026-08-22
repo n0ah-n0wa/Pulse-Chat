@@ -37,9 +37,14 @@ describe('parseAppConfig', () => {
     expect(config.fileStorage.provider).toBe('local');
     expect(config.fileStorage.path).toBe('./storage');
     expect(config.rateLimit.messages).toBe(20);
+    expect(config.rateLimit.messagesWindowSeconds).toBe(10);
     expect(config.rateLimit.login).toBe(5);
     expect(config.rateLimit.register).toBe(5);
     expect(config.rateLimit.authWindowSeconds).toBe(60);
+    expect(config.rateLimit.search).toBe(30);
+    expect(config.rateLimit.searchWindowSeconds).toBe(60);
+    expect(config.rateLimit.uploads).toBe(10);
+    expect(config.rateLimit.uploadsWindowSeconds).toBe(60);
   });
 
   it('applies defaults and insecure JWT placeholders in development', () => {
@@ -52,9 +57,12 @@ describe('parseAppConfig', () => {
     expect(config.jwt.accessExpiresIn).toBe('15m');
     expect(config.fileStorage.provider).toBe('local');
     expect(config.rateLimit.messages).toBe(20);
+    expect(config.rateLimit.messagesWindowSeconds).toBe(10);
     expect(config.rateLimit.login).toBe(5);
     expect(config.rateLimit.register).toBe(5);
     expect(config.rateLimit.authWindowSeconds).toBe(60);
+    expect(config.rateLimit.search).toBe(30);
+    expect(config.rateLimit.uploads).toBe(10);
   });
 
   it('parses a test configuration', () => {
@@ -62,6 +70,10 @@ describe('parseAppConfig', () => {
 
     expect(config.nodeEnv).toBe('test');
     expect(config.mongodbUri).toContain('pulse_chat_test');
+    expect(config.rateLimit.login).toBe(1000);
+    expect(config.rateLimit.messages).toBe(1000);
+    expect(config.rateLimit.search).toBe(1000);
+    expect(config.rateLimit.uploads).toBe(1000);
   });
 
   it('lists every missing production secret in one error', () => {
@@ -165,10 +177,10 @@ describe('parseAppConfig', () => {
     ).toThrow(ConfigValidationError);
   });
 
-  it('rejects a non-positive login rate limit', () => {
+  it('rejects a non-positive search rate limit', () => {
     expect(() =>
       createDevelopmentConfig({
-        RATE_LIMIT_LOGIN: '0',
+        RATE_LIMIT_SEARCH: '0',
       }),
     ).toThrow(ConfigValidationError);
   });

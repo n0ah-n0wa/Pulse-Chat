@@ -3,6 +3,7 @@ import type { Socket } from 'socket.io';
 
 export interface AuthenticatedSocketData {
   userId: string;
+  requestId?: string;
 }
 
 export type AuthenticatedSocket = Socket<

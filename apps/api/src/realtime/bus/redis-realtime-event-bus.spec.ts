@@ -47,10 +47,20 @@ class InMemorySubscriber implements RedisSubscriber {
   private readonly subscribed = new Set<string>();
   private messageListener: ((channel: string, message: string) => void) | undefined;
   private reconnectListener: (() => void) | undefined;
+  private subscribeFailuresRemaining = 0;
 
   constructor(private readonly broker: InMemoryBroker) {}
 
+  failNextSubscribes(count: number): void {
+    this.subscribeFailuresRemaining = count;
+  }
+
   subscribe(channels: readonly string[]): Promise<void> {
+    if (this.subscribeFailuresRemaining > 0) {
+      this.subscribeFailuresRemaining -= 1;
+      return Promise.reject(new Error('Subscriber is disconnected.'));
+    }
+
     if (!this.connected) {
       return Promise.reject(new Error('Subscriber is disconnected.'));
     }
@@ -259,6 +269,46 @@ describe('RedisRealtimeEventBus', () => {
     expect(receivedByB).toHaveLength(0);
 
     await subscriberB.connect();
+    await instanceA.publish({
+      event: DISTRIBUTED_REALTIME_EVENTS.MESSAGE_NEW,
+      roomId: 'room-1',
+      payload: { recovered: true },
+    });
+
+    expect(receivedByB).toHaveLength(1);
+    expect(receivedByB[0]).toMatchObject({ payload: { recovered: true } });
+  });
+
+  it('retries a failed Redis resubscribe after a reconnect', async () => {
+    const subscriberB = (instanceB as unknown as { subscriber: InMemorySubscriber }).subscriber;
+    subscriberB.failNextSubscribes(1);
+
+    await subscriberB.connect();
+    await new Promise((resolve) => {
+      setTimeout(resolve, 80);
+    });
+    await instanceA.publish({
+      event: DISTRIBUTED_REALTIME_EVENTS.MESSAGE_NEW,
+      roomId: 'room-1',
+      payload: { afterRetry: true },
+    });
+
+    expect(receivedByB).toHaveLength(1);
+    expect(receivedByB[0]).toMatchObject({ payload: { afterRetry: true } });
+  });
+
+  it('retries a transient Redis publish failure then delivers the event', async () => {
+    let remainingFailures = 2;
+    const originalPublish = redis.publish.bind(redis);
+    redis.publish = (channel: string, message: string) => {
+      if (remainingFailures > 0) {
+        remainingFailures -= 1;
+        return Promise.reject(new Error('Redis is temporarily unavailable'));
+      }
+
+      return originalPublish(channel, message);
+    };
+
     await instanceA.publish({
       event: DISTRIBUTED_REALTIME_EVENTS.MESSAGE_NEW,
       roomId: 'room-1',

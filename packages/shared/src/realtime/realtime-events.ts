@@ -8,6 +8,8 @@ export const CLIENT_SOCKET_EVENTS = {
   ROOM_JOIN: 'room:join',
   ROOM_LEAVE: 'room:leave',
   MESSAGE_SEND: 'message:send',
+  TYPING_START: 'typing:start',
+  TYPING_STOP: 'typing:stop',
 } as const;
 
 /** Stable server event names for the Socket.IO transport. */
@@ -22,6 +24,8 @@ export const SERVER_SOCKET_EVENTS = {
   USER_ONLINE: 'user:online',
   USER_OFFLINE: 'user:offline',
   NOTIFICATION_NEW: 'notification:new',
+  TYPING_STARTED: 'typing:started',
+  TYPING_STOPPED: 'typing:stopped',
   ERROR: 'error',
 } as const;
 
@@ -80,10 +84,29 @@ export interface SocketErrorEvent {
   readonly message: string;
 }
 
+/** Client signals the user started typing in a room (specification section 28). */
+export interface TypingRoomEventInput {
+  readonly roomId: string;
+}
+
+/** Server broadcasts that a user started typing. */
+export interface TypingStartedEvent {
+  readonly roomId: string;
+  readonly userId: string;
+}
+
+/** Server broadcasts that a user stopped typing. */
+export interface TypingStoppedEvent {
+  readonly roomId: string;
+  readonly userId: string;
+}
+
 export interface ClientToServerEvents {
   [CLIENT_SOCKET_EVENTS.ROOM_JOIN]: (payload: RoomJoinEventInput) => void;
   [CLIENT_SOCKET_EVENTS.ROOM_LEAVE]: (payload: RoomLeaveEventInput) => void;
   [CLIENT_SOCKET_EVENTS.MESSAGE_SEND]: (payload: MessageSendEventInput) => void;
+  [CLIENT_SOCKET_EVENTS.TYPING_START]: (payload: TypingRoomEventInput) => void;
+  [CLIENT_SOCKET_EVENTS.TYPING_STOP]: (payload: TypingRoomEventInput) => void;
 }
 
 export interface ServerToClientEvents {
@@ -97,5 +120,7 @@ export interface ServerToClientEvents {
   [SERVER_SOCKET_EVENTS.USER_ONLINE]: (payload: UserOnlineEvent) => void;
   [SERVER_SOCKET_EVENTS.USER_OFFLINE]: (payload: UserOfflineEvent) => void;
   [SERVER_SOCKET_EVENTS.NOTIFICATION_NEW]: (payload: NotificationNewEvent) => void;
+  [SERVER_SOCKET_EVENTS.TYPING_STARTED]: (payload: TypingStartedEvent) => void;
+  [SERVER_SOCKET_EVENTS.TYPING_STOPPED]: (payload: TypingStoppedEvent) => void;
   [SERVER_SOCKET_EVENTS.ERROR]: (payload: SocketErrorEvent) => void;
 }

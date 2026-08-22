@@ -1,9 +1,4 @@
-export type AuthRateLimitAction = 'login' | 'register';
-
-/** Builds the Redis key for a login or registration rate-limit window. */
-export function authRateLimitKey(action: AuthRateLimitAction, ip: string): string {
-  return `rate-limit:auth:${action}:${ip}`;
-}
+import type { AuthRateLimitAction } from '../../rate-limit/rate-limit.keys.js';
 
 /** Maps an HTTP path to the authentication action being rate-limited. */
 export function resolveAuthRateLimitAction(path: string): AuthRateLimitAction | undefined {
@@ -13,6 +8,14 @@ export function resolveAuthRateLimitAction(path: string): AuthRateLimitAction | 
 
   if (path.endsWith('/auth/register')) {
     return 'register';
+  }
+
+  if (path.endsWith('/auth/refresh')) {
+    return 'refresh';
+  }
+
+  if (path.endsWith('/auth/logout')) {
+    return 'logout';
   }
 
   return undefined;

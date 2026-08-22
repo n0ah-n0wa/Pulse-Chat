@@ -11,7 +11,6 @@ import { z } from 'zod';
 import { API_ERROR_CODES, ATTACHMENT_ERROR_CODES, ATTACHMENT_MAX_BYTES } from '@pulse-chat/shared';
 
 import { ApiException } from '../../common/errors/api.exception.js';
-import type { RequestContextService } from '../logging/request-context.service.js';
 import type { StructuredLoggerService } from '../logging/structured-logger.service.js';
 import { ApiExceptionFilter } from './api-exception.filter.js';
 
@@ -34,28 +33,20 @@ function createHost(): {
   return { host, status, json };
 }
 
-function createFilter(requestId?: string): ApiExceptionFilter {
+function createFilter(): ApiExceptionFilter {
   const logger = {
     log: vi.fn(),
     warn: vi.fn(),
     error: vi.fn(),
   } satisfies Pick<StructuredLoggerService, 'log' | 'warn' | 'error'>;
 
-  const requestContext = {
-    getRequestId: vi.fn().mockReturnValue(requestId),
-    run: vi.fn(),
-  } satisfies Pick<RequestContextService, 'getRequestId' | 'run'>;
-
-  return new ApiExceptionFilter(
-    logger as unknown as StructuredLoggerService,
-    requestContext as unknown as RequestContextService,
-  );
+  return new ApiExceptionFilter(logger as unknown as StructuredLoggerService);
 }
 
 describe('ApiExceptionFilter', () => {
   it('formats ApiException responses per the specification', () => {
     const { host, status, json } = createHost();
-    const filter = createFilter('req-123');
+    const filter = createFilter();
 
     filter.catch(
       new ApiException(

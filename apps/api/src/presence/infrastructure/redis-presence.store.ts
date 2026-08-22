@@ -110,6 +110,52 @@ export class RedisPresenceStore implements PresenceStore {
     };
   }
 
+  async getPresenceMany(userIds: readonly string[]): Promise<Map<string, UserPresenceSnapshot>> {
+    const uniqueIds = [...new Set(userIds)];
+    const snapshots = new Map<string, UserPresenceSnapshot>();
+    if (uniqueIds.length === 0) {
+      return snapshots;
+    }
+
+    const values = await this.redis.mget(...uniqueIds.map((userId) => presenceUserKey(userId)));
+    const candidates: { readonly userId: string; readonly stored: StoredUserPresence }[] = [];
+
+    for (let index = 0; index < uniqueIds.length; index += 1) {
+      const userId = uniqueIds[index];
+      const raw = values[index];
+      if (userId === undefined || raw === null || raw === undefined) {
+        continue;
+      }
+
+      const stored = parseStoredPresence(raw);
+      if (stored === null) {
+        continue;
+      }
+
+      candidates.push({ userId, stored });
+    }
+
+    await Promise.all(
+      candidates.map(async ({ userId, stored }) => {
+        const socketIds = await this.pruneExpiredSessions(userId);
+        if (socketIds.length === 0) {
+          await this.clearUser(userId);
+          return;
+        }
+
+        snapshots.set(userId, {
+          userId,
+          status: 'online',
+          lastSeenAt: new Date(stored.lastSeen),
+          instanceId: stored.instanceId,
+          socketIds,
+        });
+      }),
+    );
+
+    return snapshots;
+  }
+
   async clearUser(userId: string): Promise<void> {
     const socketIds = await this.redis.smembers(presenceUserSessionsKey(userId));
     const sessionKeys = socketIds.map((socketId) => presenceSessionKey(socketId));
@@ -134,14 +180,30 @@ export class RedisPresenceStore implements PresenceStore {
 
   private async pruneExpiredSessions(userId: string): Promise<string[]> {
     const socketIds = await this.redis.smembers(presenceUserSessionsKey(userId));
-    const valid: string[] = [];
+    if (socketIds.length === 0) {
+      return [];
+    }
 
-    for (const socketId of socketIds) {
-      if ((await this.redis.exists(presenceSessionKey(socketId))) === 1) {
-        valid.push(socketId);
-      } else {
-        await this.redis.srem(presenceUserSessionsKey(userId), socketId);
+    const values = await this.redis.mget(
+      ...socketIds.map((socketId) => presenceSessionKey(socketId)),
+    );
+    const valid: string[] = [];
+    const stale: string[] = [];
+
+    for (let index = 0; index < socketIds.length; index += 1) {
+      const socketId = socketIds[index];
+      if (socketId === undefined) {
+        continue;
       }
+      if (values[index] === null) {
+        stale.push(socketId);
+      } else {
+        valid.push(socketId);
+      }
+    }
+
+    if (stale.length > 0) {
+      await this.redis.srem(presenceUserSessionsKey(userId), ...stale);
     }
 
     return valid;

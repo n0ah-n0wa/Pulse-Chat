@@ -3,7 +3,7 @@ import { MutationCache, QueryCache, QueryClient } from '@tanstack/react-query';
 import { API_ERROR_CODES } from '@pulse-chat/shared';
 
 import { isApiClientError } from './errors';
-import { useAuthStore } from '../store/auth-store';
+import { resetClientState } from './reset-client-state';
 
 function handleGlobalQueryError(error: unknown): void {
   if (!isApiClientError(error)) {
@@ -11,7 +11,7 @@ function handleGlobalQueryError(error: unknown): void {
   }
 
   if (error.statusCode === 401 || error.code === API_ERROR_CODES.UNAUTHORIZED) {
-    useAuthStore.getState().clearSession();
+    resetClientState(queryClient);
   }
 }
 

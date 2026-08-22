@@ -1,4 +1,4 @@
-import { USER_ROLES, type CreateUserInput, type UserRole } from '@pulse-chat/shared';
+import { type CreateUserInput, type UserRole } from '@pulse-chat/shared';
 
 /** Domain representation of a persisted user independent of MongoDB. */
 export interface UserRecord {
@@ -17,7 +17,9 @@ export interface UserRecord {
 
 export interface UpdateUserProfileData {
   readonly displayName?: string;
+  readonly username?: string;
   readonly bio?: string;
+  readonly avatarUrl?: string;
 }
 
 /** Data-access contract for user persistence. */
@@ -31,5 +33,3 @@ export interface UserRepository {
   updateProfile(id: string, update: UpdateUserProfileData): Promise<UserRecord | null>;
   updateLastSeenAt(id: string, lastSeenAt: Date): Promise<UserRecord | null>;
 }
-
-export const defaultUserRole = USER_ROLES.USER;

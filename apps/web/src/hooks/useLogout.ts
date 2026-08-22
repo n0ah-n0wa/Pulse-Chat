@@ -1,13 +1,14 @@
 import { useMutation } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 
+import { queryClient } from '../lib/query-client';
+import { resetClientState } from '../lib/reset-client-state';
 import { authService } from '../services/auth-service';
 import { useAuthStore } from '../store/auth-store';
 
 export function useLogout() {
   const navigate = useNavigate();
   const refreshToken = useAuthStore((state) => state.refreshToken);
-  const clearSession = useAuthStore((state) => state.clearSession);
 
   return useMutation({
     mutationFn: async () => {
@@ -22,7 +23,7 @@ export function useLogout() {
       }
     },
     onSettled: () => {
-      clearSession();
+      resetClientState(queryClient);
       void navigate('/login', { replace: true });
     },
   });

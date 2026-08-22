@@ -10,9 +10,8 @@
 # Services address each other by service name (mongodb, redis, api, web) on the
 # default compose network. localhost inside a container is that container only.
 #
-# Production concerns are deliberately absent: built images, credentials, TLS
-# and multiple API instances belong to the production infrastructure phase.
-# See docs/deployment.md.
+# Production (built images, credentials, two API instances, Redis Pub/Sub
+# fan-out) lives in docker-compose.prod.yml. See docs/deployment.md.
 
 name: pulse-chat
 
@@ -132,10 +131,15 @@ services:
       CORS_ORIGIN: http://localhost:8080
       FILE_STORAGE_PROVIDER: local
       FILE_STORAGE_PATH: ./storage
-      RATE_LIMIT_MESSAGES: '20'
       RATE_LIMIT_LOGIN: '5'
       RATE_LIMIT_REGISTER: '5'
       RATE_LIMIT_AUTH_WINDOW_SECONDS: '60'
+      RATE_LIMIT_MESSAGES: '20'
+      RATE_LIMIT_MESSAGES_WINDOW_SECONDS: '10'
+      RATE_LIMIT_SEARCH: '30'
+      RATE_LIMIT_SEARCH_WINDOW_SECONDS: '60'
+      RATE_LIMIT_UPLOADS: '10'
+      RATE_LIMIT_UPLOADS_WINDOW_SECONDS: '60'
       # JWT secrets are optional in development; insecure placeholders are applied
       # at startup when these are absent. Set real values before production.
     # Optional overrides and, from the authentication phase onwards, secrets.
@@ -152,7 +156,7 @@ services:
           'CMD',
           'node',
           '-e',
-          "fetch('http://127.0.0.1:3000/health/liveness').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+          "fetch('http://127.0.0.1:3000/health/readiness').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
         ]
       interval: 10s
       timeout: 5s

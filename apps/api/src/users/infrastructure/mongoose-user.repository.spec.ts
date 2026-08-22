@@ -75,6 +75,19 @@ describe('MongooseUserRepository', () => {
     expect(found?.passwordHash).toBeUndefined();
   });
 
+  it('never returns passwordHash from findByUsername', async () => {
+    const created = await createTestUser(repository, {
+      username: 'by_username',
+      email: 'by_username@example.com',
+      displayName: 'By Username',
+    });
+
+    const found = await repository.findByUsername(created.username);
+
+    expect(found?.id).toBe(created.id);
+    expect(found?.passwordHash).toBeUndefined();
+  });
+
   it('updates profile fields', async () => {
     const created = await createTestUser(repository, {
       username: 'profile_user',

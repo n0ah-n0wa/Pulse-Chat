@@ -14,9 +14,11 @@ import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import {
   addRoomMemberSchema,
   createRoomSchema,
+  markRoomReadSchema,
   updateRoomSchema,
   type AddRoomMemberInput,
   type CreateRoomInput,
+  type MarkRoomReadInput,
   type RoomMemberResponse,
   type RoomResponse,
   type UpdateRoomInput,
@@ -99,6 +101,16 @@ export class RoomsController {
     @Param('id') id: string,
   ): Promise<RoomMemberResponse[]> {
     return this.roomsService.listMembers(currentUser.userId, id);
+  }
+
+  @Post(':id/read')
+  @ApiOperation({ summary: 'Update read state for the current user in a room' })
+  markRead(
+    @CurrentUser() currentUser: AuthenticatedUser,
+    @Param('id') id: string,
+    @Body(new ZodValidationPipe(markRoomReadSchema)) body: MarkRoomReadInput,
+  ): Promise<RoomMemberResponse> {
+    return this.roomsService.markRoomRead(currentUser.userId, id, body);
   }
 
   @Post(':id/members')

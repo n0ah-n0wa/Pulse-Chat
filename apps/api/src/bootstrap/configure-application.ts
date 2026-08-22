@@ -1,12 +1,14 @@
 import { RequestMethod, type INestApplication } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import type { NestExpressApplication } from '@nestjs/platform-express';
+import type { NextFunction, Request, Response } from 'express';
 import helmet from 'helmet';
 
 import { APP_NAME } from '@pulse-chat/shared';
 
 import { REQUEST_BODY_LIMIT } from '../common/constants/http.constants.js';
-import type { AppConfigService } from '../config/index.js';
+import { APP_INSTANCE_ID, type AppConfigService } from '../config/index.js';
+import { CorsIoAdapter } from './cors-io.adapter.js';
 
 const HEALTH_PATHS = [
   { path: 'health', method: RequestMethod.ALL },
@@ -26,6 +28,14 @@ export function configureApplication(app: INestApplication, config: AppConfigSer
   // Trust the single reverse-proxy hop (nginx). Combined with nginx overwriting
   // X-Forwarded-For, this yields the real client IP for auth rate limiting.
   expressApp.set('trust proxy', 1);
+
+  const instanceId = app.get<string>(APP_INSTANCE_ID);
+  expressApp.use((_req: Request, res: Response, next: NextFunction) => {
+    res.setHeader('X-Pulse-Instance', instanceId);
+    next();
+  });
+
+  expressApp.useWebSocketAdapter(new CorsIoAdapter(expressApp, config.corsOrigin));
 
   expressApp.use(
     helmet({

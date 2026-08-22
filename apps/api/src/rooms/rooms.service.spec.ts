@@ -2,11 +2,13 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   MEMBERSHIP_ROLES,
+  MESSAGE_ERROR_CODES,
   ROOM_ERROR_CODES,
   ROOM_TYPES,
   USER_ERROR_CODES,
 } from '@pulse-chat/shared';
 
+import type { MessageRepository } from '../messages/message.repository.interface.js';
 import type { UserRepository } from '../users/user.repository.interface.js';
 import type { RoomMemberRecord, RoomMemberRepository } from './room-member.repository.interface.js';
 import type { RoomRecord, RoomRepository } from './room.repository.interface.js';
@@ -57,8 +59,10 @@ describe('RoomsService', () => {
   const deleteByRoomAndUser = vi.fn<RoomMemberRepository['deleteByRoomAndUser']>();
   const deleteByRoomId = vi.fn<RoomMemberRepository['deleteByRoomId']>();
   const countByRoomId = vi.fn<RoomMemberRepository['countByRoomId']>();
+  const updateReadState = vi.fn<RoomMemberRepository['updateReadState']>();
 
   const findUserById = vi.fn<UserRepository['findById']>();
+  const findMessageById = vi.fn<MessageRepository['findById']>();
 
   const rooms: RoomRepository = {
     create: createRoom,
@@ -79,6 +83,7 @@ describe('RoomsService', () => {
     deleteByRoomAndUser,
     deleteByRoomId,
     countByRoomId,
+    updateReadState,
   };
 
   const users: UserRepository = {
@@ -92,10 +97,25 @@ describe('RoomsService', () => {
     updateLastSeenAt: vi.fn(),
   };
 
+  const messages = {
+    findById: findMessageById,
+  } as unknown as MessageRepository;
+
   const notificationsService = {
     notifyRoomInvitation: vi.fn().mockResolvedValue(undefined),
   } as unknown as import('../notifications/notifications.service.js').NotificationsService;
-  const service = new RoomsService(rooms, members, users, notificationsService);
+  const evictMemberFromRoom = vi.fn().mockResolvedValue(undefined);
+  const realtimeBroadcast = {
+    evictMemberFromRoom,
+  } as unknown as import('../realtime/realtime-message-broadcast.service.js').RealtimeMessageBroadcastService;
+  const service = new RoomsService(
+    rooms,
+    members,
+    users,
+    messages,
+    notificationsService,
+    realtimeBroadcast,
+  );
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -170,11 +190,13 @@ describe('RoomsService', () => {
   it('lets the owner delete a private room', async () => {
     findRoomById.mockResolvedValue(room({ type: ROOM_TYPES.PRIVATE }));
     findByRoomAndUser.mockResolvedValue(member());
+    findByRoomId.mockResolvedValue([member()]);
 
     await service.deleteRoom(OWNER_ID, ROOM_ID);
 
     expect(deleteByRoomId).toHaveBeenCalledWith(ROOM_ID);
     expect(deleteRoomById).toHaveBeenCalledWith(ROOM_ID);
+    expect(evictMemberFromRoom).toHaveBeenCalledWith(ROOM_ID, OWNER_ID);
   });
 
   it('prevents joining a private room', async () => {
@@ -398,5 +420,169 @@ describe('RoomsService', () => {
     await expect(service.listMembers(MEMBER_ID, ROOM_ID)).rejects.toMatchObject({
       code: ROOM_ERROR_CODES.NOT_A_MEMBER,
     });
+  });
+
+  it('lists member user ids for notification fan-out', async () => {
+    findByRoomId.mockResolvedValue([
+      member({ userId: OWNER_ID }),
+      member({ userId: MEMBER_ID, role: MEMBERSHIP_ROLES.MEMBER }),
+    ]);
+
+    await expect(service.listMemberUserIds(ROOM_ID)).resolves.toEqual([OWNER_ID, MEMBER_ID]);
+  });
+
+  it('maps a duplicate-key race on direct room create to conflict', async () => {
+    findUserById.mockResolvedValue({
+      id: PEER_ID,
+      username: 'peer',
+      email: 'peer@example.com',
+      displayName: 'Peer',
+      role: 'USER',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+    findByDirectKey
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(room({ type: ROOM_TYPES.DIRECT, ownerId: undefined }));
+    createRoom.mockRejectedValue({ code: 11000 });
+
+    await expect(
+      service.createRoom(OWNER_ID, { type: ROOM_TYPES.DIRECT, peerUserId: PEER_ID }),
+    ).rejects.toMatchObject({
+      code: ROOM_ERROR_CODES.DIRECT_ROOM_ALREADY_EXISTS,
+    });
+  });
+
+  it('rejects a read cursor that belongs to another room', async () => {
+    findRoomById.mockResolvedValue(room());
+    findByRoomAndUser.mockResolvedValue(member());
+    findMessageById.mockResolvedValue({
+      id: '507f1f77bcf86cd799439041',
+      roomId: '507f1f77bcf86cd799439099',
+      authorId: OWNER_ID,
+      content: 'Elsewhere',
+      clientMessageId: 'other-room',
+      attachments: [],
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+
+    await expect(
+      service.markRoomRead(OWNER_ID, ROOM_ID, { messageId: '507f1f77bcf86cd799439041' }),
+    ).rejects.toMatchObject({
+      code: ROOM_ERROR_CODES.INVALID_ROOM_OPERATION,
+    });
+    expect(updateReadState).not.toHaveBeenCalled();
+  });
+
+  it('rejects a missing read cursor message', async () => {
+    findRoomById.mockResolvedValue(room());
+    findByRoomAndUser.mockResolvedValue(member());
+    findMessageById.mockResolvedValue(null);
+
+    await expect(
+      service.markRoomRead(OWNER_ID, ROOM_ID, { messageId: '507f1f77bcf86cd799439041' }),
+    ).rejects.toMatchObject({
+      code: MESSAGE_ERROR_CODES.MESSAGE_NOT_FOUND,
+    });
+  });
+
+  it('rejects a deleted message as a read cursor', async () => {
+    findRoomById.mockResolvedValue(room());
+    findByRoomAndUser.mockResolvedValue(member());
+    findMessageById.mockResolvedValue({
+      id: '507f1f77bcf86cd799439041',
+      roomId: ROOM_ID,
+      authorId: OWNER_ID,
+      content: 'Gone',
+      clientMessageId: 'deleted',
+      attachments: [],
+      deletedAt: new Date('2026-08-18T03:00:00.000Z'),
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+
+    await expect(
+      service.markRoomRead(OWNER_ID, ROOM_ID, { messageId: '507f1f77bcf86cd799439041' }),
+    ).rejects.toMatchObject({
+      code: ROOM_ERROR_CODES.INVALID_ROOM_OPERATION,
+    });
+    expect(updateReadState).not.toHaveBeenCalled();
+  });
+
+  it('rolls back a direct room when the second membership insert fails', async () => {
+    findUserById.mockResolvedValue({
+      id: PEER_ID,
+      username: 'peer',
+      email: 'peer@example.com',
+      displayName: 'Peer',
+      role: 'USER',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+    findByDirectKey.mockResolvedValue(null);
+    createRoom.mockResolvedValue(
+      room({ type: ROOM_TYPES.DIRECT, ownerId: undefined, name: undefined }),
+    );
+    createMember
+      .mockResolvedValueOnce(member({ role: MEMBERSHIP_ROLES.MEMBER }))
+      .mockRejectedValueOnce(new Error('membership write failed'));
+
+    await expect(
+      service.createRoom(OWNER_ID, { type: ROOM_TYPES.DIRECT, peerUserId: PEER_ID }),
+    ).rejects.toThrow('membership write failed');
+
+    expect(deleteByRoomId).toHaveBeenCalledWith(ROOM_ID);
+    expect(deleteRoomById).toHaveBeenCalledWith(ROOM_ID);
+  });
+
+  it('evicts a removed member from the realtime room', async () => {
+    findRoomById.mockResolvedValue(room({ type: ROOM_TYPES.PRIVATE }));
+    findByRoomAndUser.mockImplementation((_roomId, userId) => {
+      if (userId === OWNER_ID) {
+        return Promise.resolve(member());
+      }
+
+      if (userId === MEMBER_ID) {
+        return Promise.resolve(member({ userId: MEMBER_ID, role: MEMBERSHIP_ROLES.MEMBER }));
+      }
+
+      return Promise.resolve(null);
+    });
+
+    await service.removeMember(OWNER_ID, ROOM_ID, MEMBER_ID);
+
+    expect(deleteByRoomAndUser).toHaveBeenCalledWith(ROOM_ID, MEMBER_ID);
+    expect(evictMemberFromRoom).toHaveBeenCalledWith(ROOM_ID, MEMBER_ID);
+  });
+
+  it('evicts a leaving member from the realtime room', async () => {
+    findRoomById.mockResolvedValue(room({ type: ROOM_TYPES.PRIVATE }));
+    findByRoomAndUser.mockResolvedValue(
+      member({ userId: MEMBER_ID, role: MEMBERSHIP_ROLES.MEMBER }),
+    );
+
+    await service.leaveRoom(MEMBER_ID, ROOM_ID);
+
+    expect(deleteByRoomAndUser).toHaveBeenCalledWith(ROOM_ID, MEMBER_ID);
+    expect(evictMemberFromRoom).toHaveBeenCalledWith(ROOM_ID, MEMBER_ID);
+  });
+
+  it('evicts both participants when a direct room is left', async () => {
+    findRoomById.mockResolvedValue(room({ type: ROOM_TYPES.DIRECT, ownerId: undefined }));
+    findByRoomAndUser.mockResolvedValue(
+      member({ userId: OWNER_ID, role: MEMBERSHIP_ROLES.MEMBER }),
+    );
+    findByRoomId.mockResolvedValue([
+      member({ userId: OWNER_ID, role: MEMBERSHIP_ROLES.MEMBER }),
+      member({ userId: PEER_ID, role: MEMBERSHIP_ROLES.MEMBER }),
+    ]);
+
+    await service.leaveRoom(OWNER_ID, ROOM_ID);
+
+    expect(deleteByRoomId).toHaveBeenCalledWith(ROOM_ID);
+    expect(deleteRoomById).toHaveBeenCalledWith(ROOM_ID);
+    expect(evictMemberFromRoom).toHaveBeenCalledWith(ROOM_ID, OWNER_ID);
+    expect(evictMemberFromRoom).toHaveBeenCalledWith(ROOM_ID, PEER_ID);
   });
 });

@@ -108,30 +108,38 @@ export class PresenceService implements OnModuleInit, OnModuleDestroy {
     const now = new Date();
 
     for (const [socketId, userId] of this.userBySocket.entries()) {
-      const refreshed = await this.store.refreshConnection(
-        userId,
-        socketId,
-        now,
-        this.options.ttlSeconds,
-        this.options.instanceId,
-      );
+      try {
+        const refreshed = await this.store.refreshConnection(
+          userId,
+          socketId,
+          now,
+          this.options.ttlSeconds,
+          this.options.instanceId,
+        );
 
-      if (refreshed) {
+        if (refreshed) {
+          this.lastSeenByUser.set(userId, now);
+          continue;
+        }
+
+        await this.store.addConnection(
+          userId,
+          socketId,
+          now,
+          this.options.ttlSeconds,
+          this.options.instanceId,
+        );
         this.lastSeenByUser.set(userId, now);
-        continue;
+      } catch {
+        // Transient Redis failures are retried on the next heartbeat.
       }
-
-      await this.store.addConnection(
-        userId,
-        socketId,
-        now,
-        this.options.ttlSeconds,
-        this.options.instanceId,
-      );
-      this.lastSeenByUser.set(userId, now);
     }
 
-    await this.sweepExpired();
+    try {
+      await this.sweepExpired();
+    } catch {
+      // Same as above: keep local tracking and retry later.
+    }
   }
 
   async sweepExpired(): Promise<void> {
@@ -151,6 +159,10 @@ export class PresenceService implements OnModuleInit, OnModuleDestroy {
 
   async getPresence(userId: string): Promise<UserPresenceSnapshot | null> {
     return this.store.getPresence(userId);
+  }
+
+  async getPresenceMany(userIds: readonly string[]): Promise<Map<string, UserPresenceSnapshot>> {
+    return this.store.getPresenceMany(userIds);
   }
 
   async isOnline(userId: string): Promise<boolean> {

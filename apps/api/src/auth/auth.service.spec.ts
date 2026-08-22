@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AUTH_ERROR_CODES } from '@pulse-chat/shared';
 
+import type { StructuredLoggerService } from '../infrastructure/logging/structured-logger.service.js';
 import type { UserRepository } from '../users/user.repository.interface.js';
 import { AuthService } from './auth.service.js';
 import type { PasswordHasher } from './password-hasher.interface.js';
@@ -60,7 +61,19 @@ describe('AuthService', () => {
     accessTokenExpiresIn: 900,
   } as unknown as TokenService;
 
-  const service = new AuthService(users, refreshTokens, passwordHasher, tokenService);
+  const logger = {
+    log: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+  } satisfies Pick<StructuredLoggerService, 'log' | 'warn' | 'error'>;
+
+  const service = new AuthService(
+    users,
+    refreshTokens,
+    passwordHasher,
+    tokenService,
+    logger as unknown as StructuredLoggerService,
+  );
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -143,6 +156,16 @@ describe('AuthService', () => {
     ).rejects.toMatchObject({ code: AUTH_ERROR_CODES.INVALID_CREDENTIALS });
 
     expect(verifyPassword).toHaveBeenCalledWith('secret', expect.any(String));
+    expect(logger.warn).toHaveBeenCalledWith(
+      'auth.failure',
+      expect.objectContaining({
+        reason: 'invalid_credentials',
+        code: AUTH_ERROR_CODES.INVALID_CREDENTIALS,
+      }),
+    );
+    const failureCalls: unknown = logger.warn.mock.calls;
+    expect(JSON.stringify(failureCalls)).not.toContain('missing@example.com');
+    expect(JSON.stringify(failureCalls)).not.toContain('secret');
   });
 
   it('rotates refresh tokens by atomically claiming the previous session', async () => {
@@ -193,7 +216,7 @@ describe('AuthService', () => {
     expect(revokeByJti).not.toHaveBeenCalled();
   });
 
-  it('revokes the token family when a revoked refresh token is reused', async () => {
+  it('revokes the token family when a revoked refresh token is reused after the grace window', async () => {
     verifyRefreshToken.mockReturnValue({
       sub: '507f1f77bcf86cd799439011',
       jti: 'old-jti',
@@ -208,16 +231,25 @@ describe('AuthService', () => {
       familyId: 'family-1',
       tokenHash: hashRefreshToken(replayToken),
       expiresAt: new Date(Date.now() + 60_000),
-      revokedAt: new Date(),
+      revokedAt: new Date(Date.now() - 11_000),
     });
 
     await expect(service.refresh(replayToken)).rejects.toMatchObject({
       code: AUTH_ERROR_CODES.REFRESH_TOKEN_REVOKED,
     });
     expect(revokeFamily).toHaveBeenCalledWith('family-1');
+    expect(logger.warn).toHaveBeenCalledWith(
+      'auth.failure',
+      expect.objectContaining({
+        reason: 'refresh_token_revoked',
+        code: AUTH_ERROR_CODES.REFRESH_TOKEN_REVOKED,
+      }),
+    );
+    const lastFailure: unknown = logger.warn.mock.calls.at(-1)?.[1];
+    expect(JSON.stringify(lastFailure)).not.toContain(replayToken);
   });
 
-  it('treats a lost atomic claim as refresh-token reuse', async () => {
+  it('does not wipe the family when a concurrent refresh loses the atomic claim', async () => {
     verifyRefreshToken.mockReturnValue({
       sub: '507f1f77bcf86cd799439011',
       jti: 'old-jti',
@@ -238,7 +270,7 @@ describe('AuthService', () => {
     await expect(service.refresh(racedToken)).rejects.toMatchObject({
       code: AUTH_ERROR_CODES.REFRESH_TOKEN_REVOKED,
     });
-    expect(revokeFamily).toHaveBeenCalledWith('family-1');
+    expect(revokeFamily).not.toHaveBeenCalled();
   });
 
   it('revokes refresh tokens on logout', async () => {

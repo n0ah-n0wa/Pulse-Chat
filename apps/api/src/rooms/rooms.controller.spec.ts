@@ -140,10 +140,29 @@ describe('RoomsController', () => {
       role: MEMBERSHIP_ROLES.MEMBER,
     });
 
+    const roomId = createdRoomId(created.body);
+
     await request(httpServer)
-      .post(`/api/rooms/${createdRoomId(created.body)}/leave`)
+      .post(`/api/rooms/${roomId}/leave`)
       .set(bearerAuthorization(joiner.accessToken))
       .expect(204);
+
+    await request(httpServer)
+      .get(`/api/rooms/${roomId}/messages`)
+      .set(bearerAuthorization(joiner.accessToken))
+      .expect(403);
+
+    await request(httpServer)
+      .post(`/api/rooms/${roomId}/messages`)
+      .set(bearerAuthorization(joiner.accessToken))
+      .send({ content: 'After leave', clientMessageId: 'after-leave' })
+      .expect(403);
+
+    await request(httpServer)
+      .post(`/api/rooms/${roomId}/read`)
+      .set(bearerAuthorization(joiner.accessToken))
+      .send({ messageId: '507f1f77bcf86cd799439099' })
+      .expect(403);
   });
 
   it('forbids a member from renaming, deleting, or managing members', async () => {
@@ -533,5 +552,108 @@ describe('RoomsController', () => {
       .get(`/api/rooms/${roomId}`)
       .set(bearerAuthorization(alice.accessToken))
       .expect(200);
+  });
+
+  it('updates read state when a member marks a room as read', async () => {
+    const owner = await registerTestUser(httpServer, { username: 'read_owner' });
+
+    const created = await request(httpServer)
+      .post('/api/rooms')
+      .set(bearerAuthorization(owner.accessToken))
+      .send({ type: ROOM_TYPES.PUBLIC, name: 'Read markers' })
+      .expect(201);
+
+    const roomId = createdRoomId(created.body);
+
+    const first = await request(httpServer)
+      .post(`/api/rooms/${roomId}/messages`)
+      .set(bearerAuthorization(owner.accessToken))
+      .send({ content: 'First', clientMessageId: 'read-msg-1' })
+      .expect(201);
+
+    const second = await request(httpServer)
+      .post(`/api/rooms/${roomId}/messages`)
+      .set(bearerAuthorization(owner.accessToken))
+      .send({ content: 'Second', clientMessageId: 'read-msg-2' })
+      .expect(201);
+
+    const readResponse = await request(httpServer)
+      .post(`/api/rooms/${roomId}/read`)
+      .set(bearerAuthorization(owner.accessToken))
+      .send({ messageId: (second.body as { id: string }).id })
+      .expect(201);
+
+    expect(readResponse.body).toMatchObject({
+      roomId,
+      userId: owner.userId,
+      lastReadMessageId: (second.body as { id: string }).id,
+    });
+
+    const listed = await request(httpServer)
+      .get('/api/rooms')
+      .set(bearerAuthorization(owner.accessToken))
+      .expect(200);
+
+    const listedRoom = (listed.body as { id: string; lastReadMessageId?: string }[]).find(
+      (entry) => entry.id === roomId,
+    );
+
+    expect(listedRoom?.lastReadMessageId).toBe((second.body as { id: string }).id);
+    expect((first.body as { id: string }).id).not.toBe((second.body as { id: string }).id);
+  });
+
+  it('forbids outsiders from marking a private room as read', async () => {
+    const owner = await registerTestUser(httpServer, { username: 'read_priv_owner' });
+    const outsider = await registerTestUser(httpServer, { username: 'read_priv_out' });
+
+    const created = await request(httpServer)
+      .post('/api/rooms')
+      .set(bearerAuthorization(owner.accessToken))
+      .send({ type: ROOM_TYPES.PRIVATE, name: 'Private read' })
+      .expect(201);
+    const roomId = createdRoomId(created.body);
+
+    const message = await request(httpServer)
+      .post(`/api/rooms/${roomId}/messages`)
+      .set(bearerAuthorization(owner.accessToken))
+      .send({ content: 'Secret', clientMessageId: 'read-priv-1' })
+      .expect(201);
+
+    const denied = await request(httpServer)
+      .post(`/api/rooms/${roomId}/read`)
+      .set(bearerAuthorization(outsider.accessToken))
+      .send({ messageId: (message.body as { id: string }).id })
+      .expect(403);
+
+    expect(denied.body).toMatchObject({ code: ROOM_ERROR_CODES.ROOM_ACCESS_DENIED });
+  });
+
+  it('rejects a read cursor from another room', async () => {
+    const owner = await registerTestUser(httpServer, { username: 'read_cross_owner' });
+
+    const firstRoom = await request(httpServer)
+      .post('/api/rooms')
+      .set(bearerAuthorization(owner.accessToken))
+      .send({ type: ROOM_TYPES.PUBLIC, name: 'Read A' })
+      .expect(201);
+    const secondRoom = await request(httpServer)
+      .post('/api/rooms')
+      .set(bearerAuthorization(owner.accessToken))
+      .send({ type: ROOM_TYPES.PUBLIC, name: 'Read B' })
+      .expect(201);
+
+    const foreign = await request(httpServer)
+      .post(`/api/rooms/${createdRoomId(secondRoom.body)}/messages`)
+      .set(bearerAuthorization(owner.accessToken))
+      .send({ content: 'Other room', clientMessageId: 'read-cross-1' })
+      .expect(201);
+
+    const denied = await request(httpServer)
+      .post(`/api/rooms/${createdRoomId(firstRoom.body)}/read`)
+      .set(bearerAuthorization(owner.accessToken))
+      .send({ messageId: (foreign.body as { id: string }).id })
+      .expect(400);
+
+    expect(denied.body).toMatchObject({ code: ROOM_ERROR_CODES.INVALID_ROOM_OPERATION });
   });
 });

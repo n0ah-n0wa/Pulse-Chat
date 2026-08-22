@@ -28,6 +28,7 @@ describe('PresenceService', () => {
   const removeConnection = vi.fn<PresenceStore['removeConnection']>();
   const refreshConnection = vi.fn<PresenceStore['refreshConnection']>();
   const getPresence = vi.fn<PresenceStore['getPresence']>();
+  const getPresenceMany = vi.fn<PresenceStore['getPresenceMany']>();
   const clearUser = vi.fn<PresenceStore['clearUser']>();
   const recordLastSeen = vi.fn<UsersService['recordLastSeen']>();
   const notifyOnline = vi.fn<PresenceNotifier['notifyOnline']>();
@@ -38,6 +39,7 @@ describe('PresenceService', () => {
     removeConnection,
     refreshConnection,
     getPresence,
+    getPresenceMany,
     clearUser,
   };
 
@@ -210,5 +212,19 @@ describe('PresenceService', () => {
     service.onModuleDestroy();
 
     expect(notifyOnline).not.toHaveBeenCalled();
+  });
+
+  it('keeps local tracking when Redis refresh fails transiently', async () => {
+    getPresence.mockResolvedValueOnce(null).mockResolvedValueOnce(snapshot());
+    addConnection.mockResolvedValue({
+      connectionCount: 1,
+      lastSeenAt: snapshot().lastSeenAt,
+    });
+    await service.connect(USER_ID, SOCKET_A);
+
+    refreshConnection.mockRejectedValue(new Error('Redis is temporarily unavailable'));
+
+    await expect(service.refreshTrackedConnections()).resolves.toBeUndefined();
+    expect(service.countLocalConnections(USER_ID)).toBe(1);
   });
 });

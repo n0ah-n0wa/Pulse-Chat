@@ -25,12 +25,16 @@ RUN corepack enable pnpm
 
 WORKDIR /app
 
+# Test-only; the image never runs mongodb-memory-server.
+ENV MONGOMS_DISABLE_POSTINSTALL=1
+
 # Manifests are their own stage so both the build and the runtime dependency
 # install reuse the same cached layer.
 FROM base AS manifests
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY apps/api/package.json ./apps/api/
 COPY apps/web/package.json ./apps/web/
+COPY e2e/package.json ./e2e/
 COPY packages/config/package.json ./packages/config/
 COPY packages/eslint-config/package.json ./packages/eslint-config/
 COPY packages/shared/package.json ./packages/shared/
@@ -57,10 +61,13 @@ COPY --from=runtime-deps --chown=node:node /app /app
 COPY --from=build --chown=node:node /app/packages/shared/dist ./packages/shared/dist
 COPY --from=build --chown=node:node /app/apps/api/dist ./apps/api/dist
 
+RUN mkdir -p /var/lib/pulse-chat/storage \
+    && chown node:node /var/lib/pulse-chat/storage
+
 USER node
 EXPOSE 3000
 
 HEALTHCHECK --interval=10s --timeout=5s --start-period=20s --retries=3 \
-  CMD node -e "fetch('http://127.0.0.1:3000/health/liveness').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+  CMD node -e "fetch('http://127.0.0.1:3000/health/readiness').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
 
 CMD ["node", "--enable-source-maps", "apps/api/dist/main.js"]

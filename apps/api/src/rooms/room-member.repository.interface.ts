@@ -28,6 +28,11 @@ export interface RoomMemberRepository {
     userId: string,
     role: MembershipRole,
   ): Promise<RoomMemberRecord | null>;
+  updateReadState(
+    roomId: string,
+    userId: string,
+    messageId: string,
+  ): Promise<RoomMemberRecord | null>;
   deleteByRoomAndUser(roomId: string, userId: string): Promise<boolean>;
   deleteByRoomId(roomId: string): Promise<void>;
   countByRoomId(roomId: string): Promise<number>;

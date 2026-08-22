@@ -28,6 +28,7 @@ WORKDIR /app
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY apps/api/package.json ./apps/api/
 COPY apps/web/package.json ./apps/web/
+COPY e2e/package.json ./e2e/
 COPY packages/config/package.json ./packages/config/
 COPY packages/eslint-config/package.json ./packages/eslint-config/
 COPY packages/shared/package.json ./packages/shared/
@@ -44,6 +45,10 @@ RUN pnpm --filter @pulse-chat/shared build \
 FROM nginx:${NGINX_VERSION}-alpine AS production
 
 COPY infrastructure/nginx/spa.conf /etc/nginx/conf.d/default.conf
+COPY infrastructure/nginx/security-headers.conf /etc/nginx/security-headers.conf
 COPY --from=build /app/apps/web/dist /usr/share/nginx/html
 
 EXPOSE 80
+
+HEALTHCHECK --interval=10s --timeout=3s --start-period=5s --retries=3 \
+  CMD wget --quiet --tries=1 --spider http://127.0.0.1/nginx-health || exit 1

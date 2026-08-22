@@ -1,12 +1,14 @@
-import { HttpStatus, Inject, Injectable } from '@nestjs/common';
+import { HttpStatus, Inject, Injectable, Logger } from '@nestjs/common';
 
 import {
   MEMBERSHIP_ROLES,
+  MESSAGE_ERROR_CODES,
   ROOM_ERROR_CODES,
   ROOM_TYPES,
   USER_ERROR_CODES,
   type AddRoomMemberInput,
   type CreateRoomInput,
+  type MarkRoomReadInput,
   type MembershipRole,
   type RoomMemberResponse,
   type RoomResponse,
@@ -15,7 +17,10 @@ import {
 
 import { ApiException } from '../common/errors/api.exception.js';
 import { isValidObjectId } from '../common/validation/is-valid-object-id.js';
+import type { MessageRepository } from '../messages/message.repository.interface.js';
+import { MESSAGE_REPOSITORY } from '../messages/messages.tokens.js';
 import { NotificationsService } from '../notifications/notifications.service.js';
+import { RealtimeMessageBroadcastService } from '../realtime/realtime-message-broadcast.service.js';
 import type { UserRepository } from '../users/user.repository.interface.js';
 import { USER_REPOSITORY } from '../users/users.tokens.js';
 import type { RoomMemberRecord, RoomMemberRepository } from './room-member.repository.interface.js';
@@ -37,11 +42,15 @@ import { buildDirectKey } from './utils/direct-key.js';
 
 @Injectable()
 export class RoomsService {
+  private readonly logger = new Logger(RoomsService.name);
+
   constructor(
     @Inject(ROOM_REPOSITORY) private readonly rooms: RoomRepository,
     @Inject(ROOM_MEMBER_REPOSITORY) private readonly members: RoomMemberRepository,
     @Inject(USER_REPOSITORY) private readonly users: UserRepository,
+    @Inject(MESSAGE_REPOSITORY) private readonly messages: MessageRepository,
     private readonly notificationsService: NotificationsService,
+    private readonly realtimeBroadcast: RealtimeMessageBroadcastService,
   ) {}
 
   async listRooms(userId: string): Promise<RoomResponse[]> {
@@ -60,7 +69,7 @@ export class RoomsService {
 
     return [...roomsById.values()]
       .sort((left, right) => right.updatedAt.getTime() - left.updatedAt.getTime())
-      .map((room) => toRoomResponse(room, membershipByRoomId.get(room.id)?.role));
+      .map((room) => toRoomResponse(room, membershipByRoomId.get(room.id)));
   }
 
   async createRoom(userId: string, input: CreateRoomInput): Promise<RoomResponse> {
@@ -81,12 +90,12 @@ export class RoomsService {
       role: MEMBERSHIP_ROLES.OWNER,
     });
 
-    return toRoomResponse(room, membership.role);
+    return toRoomResponse(room, membership);
   }
 
   async getRoom(userId: string, roomId: string): Promise<RoomResponse> {
     const { room, membership } = await this.loadAccessibleRoom(userId, roomId);
-    return toRoomResponse(room, membership?.role);
+    return toRoomResponse(room, membership ?? undefined);
   }
 
   async updateRoom(userId: string, roomId: string, input: UpdateRoomInput): Promise<RoomResponse> {
@@ -125,7 +134,7 @@ export class RoomsService {
     }
 
     const currentMembership = await this.members.findByRoomAndUser(room.id, userId);
-    return toRoomResponse(updated, currentMembership?.role);
+    return toRoomResponse(updated, currentMembership ?? undefined);
   }
 
   async deleteRoom(userId: string, roomId: string): Promise<void> {
@@ -135,8 +144,12 @@ export class RoomsService {
       this.throwInsufficientRole();
     }
 
+    const occupants = await this.members.findByRoomId(room.id);
     await this.members.deleteByRoomId(room.id);
     await this.rooms.deleteById(room.id);
+    await Promise.all(
+      occupants.map((occupant) => this.evictMemberFromRealtime(room.id, occupant.userId)),
+    );
   }
 
   async joinRoom(userId: string, roomId: string): Promise<RoomMemberResponse> {
@@ -167,8 +180,13 @@ export class RoomsService {
     const { room, membership } = await this.loadMemberRoom(userId, roomId);
 
     if (room.type === ROOM_TYPES.DIRECT) {
+      const peerUserId = await this.getDirectRoomPeer(room.id, userId);
       await this.members.deleteByRoomId(room.id);
       await this.rooms.deleteById(room.id);
+      await this.evictMemberFromRealtime(room.id, userId);
+      if (peerUserId !== undefined) {
+        await this.evictMemberFromRealtime(room.id, peerUserId);
+      }
       return;
     }
 
@@ -184,16 +202,68 @@ export class RoomsService {
 
       await this.members.deleteByRoomId(room.id);
       await this.rooms.deleteById(room.id);
+      await this.evictMemberFromRealtime(room.id, userId);
       return;
     }
 
     await this.members.deleteByRoomAndUser(room.id, userId);
+    await this.evictMemberFromRealtime(room.id, userId);
   }
 
   async listMembers(userId: string, roomId: string): Promise<RoomMemberResponse[]> {
     const { room } = await this.loadMemberRoom(userId, roomId);
     const members = await this.members.findByRoomId(room.id);
     return members.map((member) => toRoomMemberResponse(member));
+  }
+
+  async markRoomRead(
+    userId: string,
+    roomId: string,
+    input: MarkRoomReadInput,
+  ): Promise<RoomMemberResponse> {
+    await this.loadMemberRoom(userId, roomId);
+    const message = await this.messages.findById(input.messageId);
+    if (message === null) {
+      throw new ApiException(
+        MESSAGE_ERROR_CODES.MESSAGE_NOT_FOUND,
+        'Message not found.',
+        HttpStatus.NOT_FOUND,
+      );
+    }
+
+    if (message.roomId !== roomId) {
+      throw new ApiException(
+        ROOM_ERROR_CODES.INVALID_ROOM_OPERATION,
+        'Read cursor must reference a message in this room.',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+
+    if (message.deletedAt !== undefined) {
+      throw new ApiException(
+        ROOM_ERROR_CODES.INVALID_ROOM_OPERATION,
+        'Read cursor cannot reference a deleted message.',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+
+    const updated = await this.members.updateReadState(roomId, userId, input.messageId);
+
+    if (updated === null) {
+      throw new ApiException(
+        ROOM_ERROR_CODES.MEMBER_NOT_FOUND,
+        'Membership not found for this room.',
+        HttpStatus.NOT_FOUND,
+      );
+    }
+
+    return toRoomMemberResponse(updated);
+  }
+
+  /** Member user ids for a room, used by notification fan-out. */
+  async listMemberUserIds(roomId: string): Promise<readonly string[]> {
+    const members = await this.members.findByRoomId(roomId);
+    return members.map((member) => member.userId);
   }
 
   async addMember(
@@ -237,7 +307,13 @@ export class RoomsService {
 
     void this.notificationsService
       .notifyRoomInvitation(actorId, input.userId, room.id)
-      .catch(() => undefined);
+      .catch((error: unknown) => {
+        this.logger.warn(
+          `Failed to send room invitation notification: ${
+            error instanceof Error ? error.message : 'unknown error'
+          }`,
+        );
+      });
 
     return toRoomMemberResponse(created);
   }
@@ -287,6 +363,7 @@ export class RoomsService {
     }
 
     await this.members.deleteByRoomAndUser(room.id, targetUserId);
+    await this.evictMemberFromRealtime(room.id, targetUserId);
   }
 
   private async createDirectRoom(userId: string, input: CreateRoomInput): Promise<RoomResponse> {
@@ -321,25 +398,51 @@ export class RoomsService {
       );
     }
 
-    const room = await this.rooms.create({
-      type: ROOM_TYPES.DIRECT,
-      name: input.name,
-      description: input.description,
-      directKey,
-    });
+    let room: RoomRecord;
+    try {
+      room = await this.rooms.create({
+        type: ROOM_TYPES.DIRECT,
+        name: input.name,
+        description: input.description,
+        directKey,
+      });
+    } catch (error) {
+      if (this.isDuplicateKeyError(error)) {
+        const raced = await this.rooms.findByDirectKey(directKey);
+        if (raced !== null) {
+          throw new ApiException(
+            ROOM_ERROR_CODES.DIRECT_ROOM_ALREADY_EXISTS,
+            'A direct room with this user already exists.',
+            HttpStatus.CONFLICT,
+          );
+        }
+      }
+      throw error;
+    }
 
-    await this.members.create({
-      roomId: room.id,
-      userId,
-      role: MEMBERSHIP_ROLES.MEMBER,
-    });
-    await this.members.create({
-      roomId: room.id,
-      userId: peerUserId,
-      role: MEMBERSHIP_ROLES.MEMBER,
-    });
+    try {
+      await this.members.create({
+        roomId: room.id,
+        userId,
+        role: MEMBERSHIP_ROLES.MEMBER,
+      });
+      await this.members.create({
+        roomId: room.id,
+        userId: peerUserId,
+        role: MEMBERSHIP_ROLES.MEMBER,
+      });
+    } catch (error) {
+      await this.members.deleteByRoomId(room.id);
+      await this.rooms.deleteById(room.id);
+      throw error;
+    }
 
-    return toRoomResponse(room, MEMBERSHIP_ROLES.MEMBER);
+    const membership = await this.members.findByRoomAndUser(room.id, userId);
+    return toRoomResponse(room, membership ?? undefined);
+  }
+
+  private async evictMemberFromRealtime(roomId: string, userId: string): Promise<void> {
+    await this.realtimeBroadcast.evictMemberFromRoom(roomId, userId);
   }
 
   private async transferOwnership(

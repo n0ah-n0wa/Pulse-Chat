@@ -36,3 +36,7 @@ NotificationSchema.index({ userId: 1, type: 1, referenceId: 1, actorId: 1 }, { u
 
 // Efficient cursor-paginated listing newest-first.
 NotificationSchema.index({ userId: 1, createdAt: -1, _id: -1 });
+
+// markAllRead filters unread rows for one recipient (`isRead` is the stored flag;
+// the spec's `(userId, readAt)` index maps onto this boolean field).
+NotificationSchema.index({ userId: 1, isRead: 1 });

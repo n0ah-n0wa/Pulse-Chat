@@ -1,6 +1,7 @@
 packages:
   - apps/*
   - packages/*
+  - e2e
 
 # pnpm blocks dependency lifecycle scripts by default. These packages ship
 # prebuilt native binaries or download runtime assets during install, so they

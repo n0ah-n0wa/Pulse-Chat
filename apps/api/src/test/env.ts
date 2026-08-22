@@ -19,9 +19,14 @@ for (const [key, value] of Object.entries({
   FILE_STORAGE_PROVIDER: testConfig.fileStorage.provider,
   FILE_STORAGE_PATH: testConfig.fileStorage.path ?? '',
   RATE_LIMIT_MESSAGES: String(testConfig.rateLimit.messages),
+  RATE_LIMIT_MESSAGES_WINDOW_SECONDS: String(testConfig.rateLimit.messagesWindowSeconds),
   RATE_LIMIT_LOGIN: String(testConfig.rateLimit.login),
   RATE_LIMIT_REGISTER: String(testConfig.rateLimit.register),
   RATE_LIMIT_AUTH_WINDOW_SECONDS: String(testConfig.rateLimit.authWindowSeconds),
+  RATE_LIMIT_SEARCH: String(testConfig.rateLimit.search),
+  RATE_LIMIT_SEARCH_WINDOW_SECONDS: String(testConfig.rateLimit.searchWindowSeconds),
+  RATE_LIMIT_UPLOADS: String(testConfig.rateLimit.uploads),
+  RATE_LIMIT_UPLOADS_WINDOW_SECONDS: String(testConfig.rateLimit.uploadsWindowSeconds),
 })) {
   process.env[key] = value;
 }

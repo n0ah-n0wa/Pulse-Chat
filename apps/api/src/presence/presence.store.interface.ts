@@ -54,5 +54,8 @@ export interface PresenceStore {
 
   getPresence(userId: string): Promise<UserPresenceSnapshot | null>;
 
+  /** One round-trip for room-join snapshots; missing users are omitted. */
+  getPresenceMany(userIds: readonly string[]): Promise<Map<string, UserPresenceSnapshot>>;
+
   clearUser(userId: string): Promise<void>;
 }

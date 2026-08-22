@@ -4,18 +4,23 @@ on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
 
 concurrency:
-  group: ci-${{ github.ref }}
+  group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 permissions:
   contents: read
 
+env:
+  CI: true
+
 jobs:
-  verify:
-    name: Lint, typecheck, test, build
+  quality:
+    name: Quality
     runs-on: ubuntu-latest
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
 
@@ -25,6 +30,15 @@ jobs:
         with:
           node-version-file: .nvmrc
           cache: pnpm
+
+      - name: Cache Turborepo
+        uses: actions/cache@v4
+        with:
+          path: .turbo
+          key: turbo-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml', 'turbo.json') }}-${{ github.sha }}
+          restore-keys: |
+            turbo-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml', 'turbo.json') }}-
+            turbo-${{ runner.os }}-
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -38,8 +52,110 @@ jobs:
       - name: Typecheck
         run: pnpm typecheck
 
-      - name: Test
-        run: pnpm test
+      - name: Unit tests
+        run: pnpm test:unit
+
+      - name: Integration tests
+        run: pnpm test:integration
 
       - name: Build
         run: pnpm build
+
+  e2e:
+    name: End-to-end
+    needs: quality
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      mongodb:
+        image: mongo:8.0
+        ports:
+          - 27017:27017
+        options: >-
+          --health-cmd "mongosh --quiet --eval \"db.adminCommand('ping').ok\""
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 12
+      redis:
+        image: redis:8.10-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 3s
+          --health-retries 12
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('e2e/package.json', 'pnpm-lock.yaml') }}
+
+      - name: Install Playwright Chromium
+        run: pnpm --filter @pulse-chat/e2e exec playwright install --with-deps chromium
+
+      - name: Run end-to-end tests
+        run: pnpm test:e2e
+
+  docker:
+    name: Production images
+    needs: quality
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      actions: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Validate production compose file
+        run: docker compose -f docker-compose.prod.yml config --quiet
+
+      - name: Build API image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: infrastructure/docker/api.Dockerfile
+          target: production
+          push: false
+          load: false
+          cache-from: type=gha,scope=pulse-api
+          cache-to: type=gha,mode=min,scope=pulse-api
+
+      - name: Build web image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: infrastructure/docker/web.Dockerfile
+          target: production
+          push: false
+          load: false
+          cache-from: type=gha,scope=pulse-web
+          cache-to: type=gha,mode=min,scope=pulse-web
+
+  ci:
+    name: CI
+    if: always()
+    needs: [quality, e2e, docker]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require every pipeline job to succeed
+        run: |
+          test "${{ needs.quality.result }}" = "success"
+          test "${{ needs.e2e.result }}" = "success"
+          test "${{ needs.docker.result }}" = "success"

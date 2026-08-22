@@ -13,12 +13,14 @@
     "lint": "eslint . --max-warnings 0",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:unit": "vitest run",
     "typecheck": "tsc -p tsconfig.json"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",
     "@pulse-chat/shared": "workspace:*",
     "@tanstack/react-query": "^5.90.21",
+    "@tanstack/react-virtual": "^3.14.10",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "react-hook-form": "^7.71.2",

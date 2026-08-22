@@ -1,0 +1,9 @@
+{
+  "extends": "@pulse-chat/config/tsconfig/nest.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "experimentalDecorators": false,
+    "emitDecoratorMetadata": false
+  },
+  "include": ["src", "playwright.config.ts", "global-setup.ts"]
+}

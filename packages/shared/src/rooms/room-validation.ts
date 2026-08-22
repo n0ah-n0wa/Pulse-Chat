@@ -89,3 +89,11 @@ export const addRoomMemberSchema = z
 export type CreateRoomInput = z.infer<typeof createRoomSchema>;
 export type UpdateRoomInput = z.infer<typeof updateRoomSchema>;
 export type AddRoomMemberInput = z.infer<typeof addRoomMemberSchema>;
+
+export const markRoomReadSchema = z
+  .object({
+    messageId: roomResourceIdSchema,
+  })
+  .strict();
+
+export type MarkRoomReadInput = z.infer<typeof markRoomReadSchema>;

@@ -14,9 +14,21 @@ import type {
 } from '../message.repository.interface.js';
 import { MESSAGE_REPOSITORY } from '../messages.tokens.js';
 import { objectIdToString } from '../utils/object-id.js';
-import { MessageDocument, type MessageDocumentHydrated } from './message.schema.js';
+import { MessageDocument } from './message.schema.js';
 
-function toMessageRecord(document: MessageDocumentHydrated): MessageRecord {
+function toMessageRecord(document: {
+  readonly _id: Types.ObjectId;
+  readonly roomId: Types.ObjectId;
+  readonly authorId: Types.ObjectId;
+  readonly content: string;
+  readonly clientMessageId: string;
+  readonly replyToMessageId?: Types.ObjectId | null;
+  readonly attachments?: readonly { readonly id: string }[];
+  readonly editedAt?: Date;
+  readonly deletedAt?: Date;
+  readonly createdAt: Date;
+  readonly updatedAt: Date;
+}): MessageRecord {
   return {
     id: document._id.toHexString(),
     roomId: objectIdToString(document.roomId),
@@ -62,7 +74,7 @@ export class MongooseMessageRepository implements MessageRepository {
       return null;
     }
 
-    const document = await this.messageModel.findById(id).exec();
+    const document = await this.messageModel.findById(id).lean().exec();
     return document ? toMessageRecord(document) : null;
   }
 
@@ -77,6 +89,7 @@ export class MongooseMessageRepository implements MessageRepository {
         authorId: new Types.ObjectId(authorId),
         clientMessageId,
       })
+      .lean()
       .exec();
 
     return document ? toMessageRecord(document) : null;
@@ -88,7 +101,10 @@ export class MongooseMessageRepository implements MessageRepository {
       return [];
     }
 
-    const documents = await this.messageModel.find({ _id: { $in: validIds } }).exec();
+    const documents = await this.messageModel
+      .find({ _id: { $in: validIds } })
+      .lean()
+      .exec();
     return documents.map((document) => toMessageRecord(document));
   }
 
@@ -112,6 +128,7 @@ export class MongooseMessageRepository implements MessageRepository {
       .find(filter)
       .sort({ createdAt: -1, _id: -1 })
       .limit(limit)
+      .lean()
       .exec();
 
     return documents.map((document) => toMessageRecord(document));
@@ -148,6 +165,7 @@ export class MongooseMessageRepository implements MessageRepository {
       .find(filter, { score: { $meta: 'textScore' } })
       .sort({ createdAt: -1, _id: -1 })
       .limit(limit)
+      .lean()
       .exec();
 
     return documents.map((document) => toMessageRecord(document));

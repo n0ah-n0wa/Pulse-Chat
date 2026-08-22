@@ -1,0 +1,21 @@
+{
+  "name": "@pulse-chat/e2e",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Pulse Chat Playwright end-to-end tests",
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "test:e2e": "playwright test",
+    "lint": "eslint . --max-warnings 0",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.55.1",
+    "@pulse-chat/config": "workspace:*",
+    "@pulse-chat/eslint-config": "workspace:*",
+    "eslint": "^10.8.1",
+    "@types/node": "^22.20.1",
+    "typescript": "~6.0.3"
+  }
+}

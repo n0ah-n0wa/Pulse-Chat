@@ -19,7 +19,7 @@ import {
 } from '../test/auth-test.helpers.js';
 import { startMongoMemoryServer, stopMongoMemoryServer } from '../test/mongo-memory.js';
 import { TestRedisService } from '../test/test-redis.service.js';
-import { authRateLimitKey } from './utils/auth-rate-limit.js';
+import { authRateLimitKey } from '../rate-limit/rate-limit.keys.js';
 
 describe('AuthController', () => {
   let moduleRef: TestingModule;
@@ -324,8 +324,14 @@ describe('AuthController', () => {
     ]);
 
     const statuses = [first.status, second.status];
-    expect(statuses.filter((status) => status === 200).length).toBeLessThanOrEqual(1);
+    expect(statuses.filter((status) => status === 200).length).toBe(1);
     expect(statuses).toContain(401);
+
+    const winner = first.status === 200 ? first : second;
+    await request(httpServer)
+      .post('/api/auth/refresh')
+      .send({ refreshToken: (winner.body as { refreshToken: string }).refreshToken })
+      .expect(200);
 
     await request(httpServer)
       .post('/api/auth/refresh')
@@ -361,6 +367,33 @@ describe('AuthController', () => {
       expect(JSON.stringify(response.body)).not.toContain('secure-password');
     } finally {
       await redis.del(...candidateIps.map((ip) => authRateLimitKey('login', ip)));
+    }
+  });
+
+  it('rate-limits refresh attempts per IP', async () => {
+    const redis = app.get(RedisService);
+    const config = app.get(AppConfigService);
+    const candidateIps = ['127.0.0.1', '::1', '::ffff:127.0.0.1'];
+
+    for (const ip of candidateIps) {
+      await redis.set(
+        authRateLimitKey('refresh', ip),
+        String(config.rateLimit.login),
+        config.rateLimit.authWindowSeconds,
+      );
+    }
+
+    try {
+      const response = await request(httpServer)
+        .post('/api/auth/refresh')
+        .send({ refreshToken: 'not-a-real-token' })
+        .expect(429);
+
+      expect(response.body).toMatchObject({
+        code: API_ERROR_CODES.TOO_MANY_REQUESTS,
+      });
+    } finally {
+      await redis.del(...candidateIps.map((ip) => authRateLimitKey('refresh', ip)));
     }
   });
 });

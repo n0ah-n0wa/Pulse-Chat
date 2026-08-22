@@ -4,6 +4,8 @@ import { describe, expect, it, vi } from 'vitest';
 import { API_ERROR_CODES, AUTH_ERROR_CODES } from '@pulse-chat/shared';
 
 import { ApiException } from '../../common/errors/api.exception.js';
+import type { RequestContextService } from '../../infrastructure/logging/request-context.service.js';
+import type { StructuredLoggerService } from '../../infrastructure/logging/structured-logger.service.js';
 import { AuthGuard } from './auth.guard.js';
 import { TokenService, TokenVerificationError } from '../token.service.js';
 import type { AuthenticatedRequest } from '../types/authenticated-request.types.js';
@@ -21,7 +23,21 @@ describe('AuthGuard', () => {
     verifyAccessToken: vi.fn(),
   } satisfies Pick<TokenService, 'verifyAccessToken'>;
 
-  const guard = new AuthGuard(tokenService as unknown as TokenService);
+  const requestContext = {
+    assign: vi.fn(),
+  } satisfies Pick<RequestContextService, 'assign'>;
+
+  const logger = {
+    log: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+  } satisfies Pick<StructuredLoggerService, 'log' | 'warn' | 'error'>;
+
+  const guard = new AuthGuard(
+    tokenService as unknown as TokenService,
+    requestContext as unknown as RequestContextService,
+    logger as unknown as StructuredLoggerService,
+  );
 
   it('allows requests with a valid access token', () => {
     vi.mocked(tokenService.verifyAccessToken).mockReturnValue({
@@ -36,6 +52,7 @@ describe('AuthGuard', () => {
 
     expect(guard.canActivate(createContext(request) as never)).toBe(true);
     expect(request.user).toEqual({ userId: '507f1f77bcf86cd799439011' });
+    expect(requestContext.assign).toHaveBeenCalledWith({ userId: '507f1f77bcf86cd799439011' });
   });
 
   it('rejects requests without a bearer token', () => {
@@ -47,6 +64,11 @@ describe('AuthGuard', () => {
     } catch (error) {
       expect((error as ApiException).code).toBe(API_ERROR_CODES.UNAUTHORIZED);
     }
+
+    expect(logger.warn).toHaveBeenCalledWith(
+      'auth.failure',
+      expect.objectContaining({ reason: 'missing_token' }),
+    );
   });
 
   it('rejects expired access tokens', () => {
@@ -65,5 +87,10 @@ describe('AuthGuard', () => {
       expect((error as ApiException).getStatus()).toBe(HttpStatus.UNAUTHORIZED);
       expect((error as ApiException).code).toBe(AUTH_ERROR_CODES.TOKEN_EXPIRED);
     }
+
+    expect(logger.warn).toHaveBeenCalledWith('auth.failure', {
+      reason: 'token_expired',
+      code: AUTH_ERROR_CODES.TOKEN_EXPIRED,
+    });
   });
 });

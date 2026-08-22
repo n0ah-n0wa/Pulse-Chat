@@ -1,18 +1,26 @@
-import { Injectable, Logger, type LogLevel } from '@nestjs/common';
+import { Injectable, type LogLevel } from '@nestjs/common';
 
 import { AppConfigService } from '../../config/index.js';
 import { RequestContextService } from './request-context.service.js';
+import { sanitizeLogReplacer } from './sanitize-log-fields.js';
 
 export type StructuredLogFields = Record<string, unknown>;
 
 /**
  * Structured logging wrapper. Production logs are JSON objects; development
- * logs use Nest's default formatting for readability.
+ * logs stay readable but serialize the same fields (and the same redaction)
+ * after the event name.
+ *
+ * Lines are written to process stdout/stderr. They must not go through Nest's
+ * `Logger` after `app.useLogger(NestStructuredLoggerService)`: that bridge
+ * calls back into this service, and a re-entrancy guard would drop the line.
+ *
+ * Request-scoped fields (`requestId`, `userId`, `roomId`, `messageId`) are
+ * merged from {@link RequestContextService} when present. Callers may still
+ * pass them explicitly; explicit fields win.
  */
 @Injectable()
 export class StructuredLoggerService {
-  private readonly nestLogger = new Logger('PulseChat');
-
   constructor(
     private readonly config: AppConfigService,
     private readonly requestContext: RequestContextService,
@@ -31,41 +39,61 @@ export class StructuredLoggerService {
   }
 
   private write(level: LogLevel, event: string, fields: StructuredLogFields): void {
-    const requestId = this.requestContext.getRequestId();
     const payload = {
+      timestamp: new Date().toISOString(),
       level,
       event,
-      ...(requestId ? { requestId } : {}),
+      ...this.contextFields(),
       ...fields,
-      timestamp: new Date().toISOString(),
     };
 
     if (this.config.nodeEnv === 'production') {
-      const line = JSON.stringify(payload);
-      switch (level) {
-        case 'error':
-          this.nestLogger.error(line);
-          break;
-        case 'warn':
-          this.nestLogger.warn(line);
-          break;
-        default:
-          this.nestLogger.log(line);
-      }
+      const line = serializeLogFields(payload) ?? '{}';
+      writeLogLine(level, `${line}\n`);
       return;
     }
 
-    const message = `${event}${Object.keys(fields).length > 0 ? ` ${JSON.stringify(fields)}` : ''}`;
-    const trace = fields['trace'];
-    switch (level) {
-      case 'error':
-        this.nestLogger.error(message, typeof trace === 'string' ? trace : undefined);
-        break;
-      case 'warn':
-        this.nestLogger.warn(message);
-        break;
-      default:
-        this.nestLogger.log(message);
+    const { level: _level, event: _event, ...rest } = payload;
+    const serializedFields = serializeLogFields(rest);
+    const message = `${event}${serializedFields === undefined ? '' : ` ${serializedFields}`}`;
+    writeLogLine(level, `${message}\n`);
+  }
+
+  private contextFields(): StructuredLogFields {
+    const store = this.requestContext.snapshot();
+    if (store === undefined) {
+      return {};
     }
+
+    return {
+      requestId: store.requestId,
+      ...(store.userId === undefined ? {} : { userId: store.userId }),
+      ...(store.roomId === undefined ? {} : { roomId: store.roomId }),
+      ...(store.messageId === undefined ? {} : { messageId: store.messageId }),
+    };
+  }
+}
+
+const LOG_FIELDS_MAX_LENGTH = 4_000;
+
+function writeLogLine(level: LogLevel, line: string): void {
+  const stream = level === 'error' ? process.stderr : process.stdout;
+  stream.write(line);
+}
+
+function serializeLogFields(value: unknown): string | undefined {
+  try {
+    const serialized = JSON.stringify(value, sanitizeLogReplacer);
+    if (serialized === undefined) {
+      return undefined;
+    }
+
+    if (serialized.length > LOG_FIELDS_MAX_LENGTH) {
+      return `${serialized.slice(0, LOG_FIELDS_MAX_LENGTH)}…`;
+    }
+
+    return serialized;
+  } catch {
+    return '{"error":"unserializable log fields"}';
   }
 }

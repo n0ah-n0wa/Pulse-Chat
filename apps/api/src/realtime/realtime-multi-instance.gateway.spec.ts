@@ -14,6 +14,7 @@ import {
   type ClientToServerEvents,
   type MessageNewEvent,
   type ServerToClientEvents,
+  type TypingStartedEvent,
   type UserOfflineEvent,
   type UserOnlineEvent,
 } from '@pulse-chat/shared';
@@ -126,6 +127,39 @@ describe('Realtime across NestJS instances', () => {
     }
   });
 
+  it('propagates typing indicators to a client on another instance', async () => {
+    const userA = await registerTestUser(instance1.httpServer, { username: 'multi_typing_a' });
+    const userB = await registerTestUser(instance2.httpServer, { username: 'multi_typing_b' });
+    const roomId = await createPublicRoom(instance1.httpServer, userA.accessToken, 'Typing Room');
+
+    await request(instance2.httpServer)
+      .post(`/api/rooms/${roomId}/join`)
+      .set(bearerAuthorization(userB.accessToken))
+      .expect(201);
+
+    const socketA = await connectSocket(instance1.serverUrl, userA.accessToken);
+    const socketB = await connectSocket(instance2.serverUrl, userB.accessToken);
+
+    try {
+      await joinRoom(socketA, roomId);
+      await joinRoom(socketB, roomId);
+
+      const startedOnB = onceTypingStartedEvent(socketB);
+      socketA.emit(CLIENT_SOCKET_EVENTS.TYPING_START, { roomId });
+
+      await expect(startedOnB).resolves.toMatchObject({
+        roomId,
+        userId: userA.userId,
+      });
+      expect(redis.publishedChannels).toContain(REALTIME_BUS_CHANNELS.TYPING);
+    } finally {
+      socketA.disconnect();
+      socketB.disconnect();
+      await waitForDisconnect(socketA);
+      await waitForDisconnect(socketB);
+    }
+  });
+
   it('propagates presence changes to a client on another instance', async () => {
     const userA = await registerTestUser(instance1.httpServer, { username: 'multi_presence_a' });
     const userB = await registerTestUser(instance2.httpServer, { username: 'multi_presence_b' });
@@ -158,6 +192,50 @@ describe('Realtime across NestJS instances', () => {
         await waitForDisconnect(socketA);
       }
       socketB.disconnect();
+      await waitForDisconnect(socketB);
+    }
+  });
+
+  it('recovers cross-instance delivery after a temporary Redis publish outage', async () => {
+    const userA = await registerTestUser(instance1.httpServer, { username: 'multi_redis_blip_a' });
+    const userB = await registerTestUser(instance2.httpServer, { username: 'multi_redis_blip_b' });
+    const roomId = await createPublicRoom(
+      instance1.httpServer,
+      userA.accessToken,
+      'Redis Blip Room',
+    );
+
+    await request(instance2.httpServer)
+      .post(`/api/rooms/${roomId}/join`)
+      .set(bearerAuthorization(userB.accessToken))
+      .expect(201);
+
+    const socketA = await connectSocket(instance1.serverUrl, userA.accessToken);
+    const socketB = await connectSocket(instance2.serverUrl, userB.accessToken);
+
+    try {
+      await joinRoom(socketA, roomId);
+      await joinRoom(socketB, roomId);
+
+      redis.failNextPublishes(2);
+
+      const receivedOnB = onceMessageNewEvent(socketB);
+      socketA.emit(CLIENT_SOCKET_EVENTS.MESSAGE_SEND, {
+        roomId,
+        content: 'After Redis recovered',
+        clientMessageId: 'redis-blip-1',
+      });
+
+      const fromA = await receivedOnB;
+      expect(fromA.message).toMatchObject({
+        roomId,
+        content: 'After Redis recovered',
+        clientMessageId: 'redis-blip-1',
+      });
+    } finally {
+      socketA.disconnect();
+      socketB.disconnect();
+      await waitForDisconnect(socketA);
       await waitForDisconnect(socketB);
     }
   });
@@ -257,6 +335,16 @@ function onceMessageNewEvent(
 ): Promise<MessageNewEvent> {
   return new Promise((resolve) => {
     socket.once(SERVER_SOCKET_EVENTS.MESSAGE_NEW, (payload: MessageNewEvent) => resolve(payload));
+  });
+}
+
+function onceTypingStartedEvent(
+  socket: Socket<ServerToClientEvents, ClientToServerEvents>,
+): Promise<TypingStartedEvent> {
+  return new Promise((resolve) => {
+    socket.once(SERVER_SOCKET_EVENTS.TYPING_STARTED, (payload: TypingStartedEvent) =>
+      resolve(payload),
+    );
   });
 }
 

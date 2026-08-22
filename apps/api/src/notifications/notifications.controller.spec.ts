@@ -100,15 +100,8 @@ describe('Notifications API', () => {
       });
 
       await onceMessageNewEvent(authorSocket);
-      // Allow async notification dispatch to complete.
-      await delay(300);
+      const items = await waitForNotifications(httpServer, mentioned.accessToken, 1);
 
-      const response = await request(httpServer)
-        .get('/api/notifications')
-        .set(bearerAuthorization(mentioned.accessToken))
-        .expect(200);
-
-      const items = (response.body as { items: unknown[] }).items;
       expect(items).toHaveLength(1);
       expect(items[0]).toMatchObject({
         type: NOTIFICATION_TYPES.MENTION,
@@ -145,15 +138,7 @@ describe('Notifications API', () => {
         await onceMessageNewEvent(authorSocket);
       }
 
-      await delay(300);
-
-      const response = await request(httpServer)
-        .get('/api/notifications')
-        .set(bearerAuthorization(mentioned.accessToken))
-        .expect(200);
-
-      // Two separate messages = two separate mention notifications (different referenceIds).
-      expect((response.body as { items: unknown[] }).items).toHaveLength(2);
+      expect(await waitForNotifications(httpServer, mentioned.accessToken, 2)).toHaveLength(2);
     } finally {
       authorSocket.disconnect();
       await waitForDisconnect(authorSocket);
@@ -197,14 +182,8 @@ describe('Notifications API', () => {
         replyToMessageId: originalMessageId,
       });
       await onceMessageNewEvent(replierSocket);
-      await delay(300);
+      const items = await waitForNotifications(httpServer, author.accessToken, 1);
 
-      const response = await request(httpServer)
-        .get('/api/notifications')
-        .set(bearerAuthorization(author.accessToken))
-        .expect(200);
-
-      const items = (response.body as { items: unknown[] }).items;
       expect(items).toHaveLength(1);
       expect(items[0]).toMatchObject({
         type: NOTIFICATION_TYPES.REPLY,
@@ -257,6 +236,47 @@ describe('Notifications API', () => {
     }
   });
 
+  it('does not notify a former member when someone replies to their old message', async () => {
+    const owner = await registerTestUser(httpServer, { username: 'notif_left_owner' });
+    const author = await registerTestUser(httpServer, { username: 'notif_left_author' });
+    const roomId = await createPublicRoom(httpServer, owner.accessToken, 'Left Reply Room');
+
+    await request(httpServer)
+      .post(`/api/rooms/${roomId}/join`)
+      .set(bearerAuthorization(author.accessToken))
+      .expect(201);
+
+    const original = await request(httpServer)
+      .post(`/api/rooms/${roomId}/messages`)
+      .set(bearerAuthorization(author.accessToken))
+      .send({ content: 'I will leave', clientMessageId: 'left-original' })
+      .expect(201);
+
+    await request(httpServer)
+      .post(`/api/rooms/${roomId}/leave`)
+      .set(bearerAuthorization(author.accessToken))
+      .expect(204);
+
+    await request(httpServer)
+      .post(`/api/rooms/${roomId}/messages`)
+      .set(bearerAuthorization(owner.accessToken))
+      .send({
+        content: 'Reply after leave',
+        clientMessageId: 'left-reply',
+        replyToMessageId: (original.body as { id: string }).id,
+      })
+      .expect(201);
+
+    await delay(300);
+
+    const response = await request(httpServer)
+      .get('/api/notifications')
+      .set(bearerAuthorization(author.accessToken))
+      .expect(200);
+
+    expect((response.body as { items: unknown[] }).items).toHaveLength(0);
+  });
+
   // ---------------------------------------------------------------------------
   // Direct message notifications
   // ---------------------------------------------------------------------------
@@ -282,14 +302,8 @@ describe('Notifications API', () => {
         clientMessageId: 'dm-1',
       });
       await onceMessageNewEvent(socketA);
-      await delay(300);
+      const items = await waitForNotifications(httpServer, userB.accessToken, 1);
 
-      const response = await request(httpServer)
-        .get('/api/notifications')
-        .set(bearerAuthorization(userB.accessToken))
-        .expect(200);
-
-      const items = (response.body as { items: unknown[] }).items;
       expect(items).toHaveLength(1);
       expect(items[0]).toMatchObject({
         type: NOTIFICATION_TYPES.DIRECT_MESSAGE,
@@ -323,14 +337,8 @@ describe('Notifications API', () => {
       .send({ userId: invited.userId })
       .expect(201);
 
-    await delay(200);
+    const items = await waitForNotifications(httpServer, invited.accessToken, 1);
 
-    const response = await request(httpServer)
-      .get('/api/notifications')
-      .set(bearerAuthorization(invited.accessToken))
-      .expect(200);
-
-    const items = (response.body as { items: unknown[] }).items;
     expect(items).toHaveLength(1);
     expect(items[0]).toMatchObject({
       type: NOTIFICATION_TYPES.ROOM_INVITATION,
@@ -364,15 +372,9 @@ describe('Notifications API', () => {
         clientMessageId: 'read-me',
       });
       await onceMessageNewEvent(socket);
-      await delay(300);
+      const items = await waitForNotifications(httpServer, reader.accessToken, 1);
 
-      const listRes = await request(httpServer)
-        .get('/api/notifications')
-        .set(bearerAuthorization(reader.accessToken))
-        .expect(200);
-
-      const items = (listRes.body as { items: { id: string }[] }).items;
-      const notifId = items[0]?.id ?? '';
+      const notifId = (items[0] as { id: string } | undefined)?.id ?? '';
       expect(notifId).not.toBe('');
 
       const readRes = await request(httpServer)
@@ -407,15 +409,9 @@ describe('Notifications API', () => {
         clientMessageId: 'read-403',
       });
       await onceMessageNewEvent(socket);
-      await delay(300);
+      const targetItems = await waitForNotifications(httpServer, target.accessToken, 1);
 
-      const listRes = await request(httpServer)
-        .get('/api/notifications')
-        .set(bearerAuthorization(target.accessToken))
-        .expect(200);
-
-      const targetItems = (listRes.body as { items: { id: string }[] }).items;
-      const notifId = targetItems[0]?.id ?? '';
+      const notifId = (targetItems[0] as { id: string } | undefined)?.id ?? '';
       expect(notifId).not.toBe('');
 
       await request(httpServer)
@@ -454,7 +450,7 @@ describe('Notifications API', () => {
         });
         await onceMessageNewEvent(socket);
       }
-      await delay(300);
+      await waitForNotifications(httpServer, reader.accessToken, 2);
 
       await request(httpServer)
         .post('/api/notifications/read-all')
@@ -545,7 +541,7 @@ describe('Notifications API', () => {
         });
         await onceMessageNewEvent(socket);
       }
-      await delay(400);
+      await waitForNotifications(httpServer, target.accessToken, 3);
 
       const page1 = await request(httpServer)
         .get('/api/notifications?limit=2')
@@ -680,4 +676,29 @@ function waitForDisconnect(
 
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/** Poll until fire-and-forget notification writes are visible over REST. */
+async function waitForNotifications(
+  httpServer: HttpServer,
+  accessToken: string,
+  expectedCount: number,
+  timeoutMs = 5_000,
+): Promise<unknown[]> {
+  const deadline = Date.now() + timeoutMs;
+  let items: unknown[] = [];
+
+  while (Date.now() < deadline) {
+    const response = await request(httpServer)
+      .get('/api/notifications')
+      .set(bearerAuthorization(accessToken))
+      .expect(200);
+    items = (response.body as { items: unknown[] }).items;
+    if (items.length >= expectedCount) {
+      return items;
+    }
+    await delay(50);
+  }
+
+  return items;
 }

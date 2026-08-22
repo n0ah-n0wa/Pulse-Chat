@@ -35,10 +35,12 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
       }
 
       return (
-        <main className="flex min-h-dvh items-center justify-center bg-slate-50 px-6 py-12 text-slate-900">
-          <section className="w-full max-w-lg rounded-xl border border-rose-200 bg-white p-8 shadow-sm">
-            <h1 className="text-xl font-semibold text-rose-700">Something went wrong</h1>
-            <p className="mt-3 text-sm leading-relaxed text-slate-600">
+        <main className="flex min-h-dvh items-center justify-center bg-slate-50 px-6 py-12 text-slate-900 dark:bg-slate-950 dark:text-slate-50">
+          <section className="w-full max-w-lg rounded-xl border border-rose-200 bg-white p-8 shadow-sm dark:border-rose-900 dark:bg-slate-900">
+            <h1 className="text-xl font-semibold text-rose-700 dark:text-rose-400">
+              Something went wrong
+            </h1>
+            <p className="mt-3 text-sm leading-relaxed text-slate-600 dark:text-slate-400">
               {toDisplayErrorMessage(error)}
             </p>
             <button

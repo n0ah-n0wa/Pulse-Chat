@@ -46,8 +46,9 @@ The two apps never import each other. Nothing imports an app.
    `SPECIFICATION.md` section 2.2 and rule 7.
 6. **Tests live next to the code** as `*.spec.ts` / `*.spec.tsx`, and every
    non-trivial backend behaviour ships with them.
-7. **Add a dependency in the phase that uses it.** The absence of Socket.IO,
-   Mongoose, Redis, Zustand and friends is intentional, not an oversight.
+7. **Add a dependency in the phase that uses it.** Do not add libraries
+   “for later.” Socket.IO, Mongoose, Redis, Zustand, and TanStack Query are
+   already in use; new ones still land with the feature that needs them.
 8. **Warnings fail the build.** Lint runs with `--max-warnings 0`.
 
 ## Validating a change
@@ -58,7 +59,9 @@ pnpm --filter @pulse-chat/api test # one package
 pnpm format
 ```
 
-`pnpm verify` is what CI runs. Do not report a task complete before it passes.
+`pnpm verify` is lint + typecheck + test + build. CI also runs `format:check`
+and Playwright (`pnpm test:e2e`). Do not report a task complete before
+`pnpm verify` passes.
 
 ## Runtime requirements
 

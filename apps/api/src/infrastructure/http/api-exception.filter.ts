@@ -20,35 +20,26 @@ import {
 
 import { ApiException } from '../../common/errors/api.exception.js';
 import { formatZodValidationMessage } from '../../common/validation/format-zod-validation-message.js';
-import { RequestContextService } from '../logging/request-context.service.js';
 import { StructuredLoggerService } from '../logging/structured-logger.service.js';
 
 @Catch()
 @Injectable()
 export class ApiExceptionFilter implements ExceptionFilter {
-  constructor(
-    private readonly logger: StructuredLoggerService,
-    private readonly requestContext: RequestContextService,
-  ) {}
+  constructor(private readonly logger: StructuredLoggerService) {}
 
   catch(exception: unknown, host: ArgumentsHost): void {
     const ctx = host.switchToHttp();
     const response = ctx.getResponse<Response>();
-    const requestId = this.requestContext.getRequestId();
     const body = this.toErrorBody(exception);
     const logContext = {
-      ...(requestId ? { requestId } : {}),
       code: body.code,
       statusCode: body.statusCode,
       message: body.message,
+      ...(exception instanceof Error && body.statusCode >= 500 ? { error: exception } : {}),
     };
 
     if (body.statusCode >= 500) {
-      this.logger.error(
-        'http.exception',
-        logContext,
-        exception instanceof Error ? exception.stack : undefined,
-      );
+      this.logger.error('http.exception', logContext);
     } else {
       this.logger.warn('http.exception', logContext);
     }

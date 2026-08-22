@@ -12,9 +12,18 @@ import type {
   NotificationRepository,
 } from '../notification.repository.interface.js';
 import { NOTIFICATION_REPOSITORY } from '../notifications.tokens.js';
-import { NotificationDocument, type NotificationDocumentHydrated } from './notification.schema.js';
+import { NotificationDocument } from './notification.schema.js';
 
-function toNotificationRecord(document: NotificationDocumentHydrated): NotificationRecord {
+function toNotificationRecord(document: {
+  readonly _id: Types.ObjectId;
+  readonly userId: Types.ObjectId;
+  readonly type: NotificationRecord['type'];
+  readonly referenceId: Types.ObjectId;
+  readonly actorId: Types.ObjectId;
+  readonly isRead: boolean;
+  readonly createdAt: Date;
+  readonly updatedAt: Date;
+}): NotificationRecord {
   return {
     id: document._id.toHexString(),
     userId: document.userId.toHexString(),
@@ -44,7 +53,7 @@ export class MongooseNotificationRepository implements NotificationRepository {
       actorId: new Types.ObjectId(input.actorId),
     };
 
-    const existing = await this.model.findOne(filter).exec();
+    const existing = await this.model.findOne(filter).lean().exec();
     if (existing !== null) {
       return { record: toNotificationRecord(existing), created: false };
     }
@@ -57,7 +66,7 @@ export class MongooseNotificationRepository implements NotificationRepository {
       return { record: toNotificationRecord(created), created: true };
     } catch (error: unknown) {
       if (this.isDuplicateKeyError(error)) {
-        const raced = await this.model.findOne(filter).exec();
+        const raced = await this.model.findOne(filter).lean().exec();
         if (raced !== null) {
           return { record: toNotificationRecord(raced), created: false };
         }
@@ -86,6 +95,7 @@ export class MongooseNotificationRepository implements NotificationRepository {
       .find(filter)
       .sort({ createdAt: -1, _id: -1 })
       .limit(limit)
+      .lean()
       .exec();
 
     return documents.map(toNotificationRecord);
@@ -96,7 +106,7 @@ export class MongooseNotificationRepository implements NotificationRepository {
       return null;
     }
 
-    const document = await this.model.findById(id).exec();
+    const document = await this.model.findById(id).lean().exec();
     return document === null ? null : toNotificationRecord(document);
   }
 

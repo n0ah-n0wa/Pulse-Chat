@@ -1,19 +1,18 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { createMemoryRouter, RouterProvider } from 'react-router-dom';
+import { createMemoryRouter, RouterProvider, type InitialEntry } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 
 import { AUTH_ERROR_CODES, TOKEN_TYPE } from '@pulse-chat/shared';
 
-import { AppHomePage } from './AppHomePage';
 import { LoginPage } from './LoginPage';
 import { RegisterPage } from './RegisterPage';
 import { GuestRoute } from '../components/GuestRoute';
 import { ProtectedRoute } from '../components/ProtectedRoute';
 import { useAuthStore } from '../store/auth-store';
 
-function renderAuthRoute(initialEntry: string, page: 'login' | 'register') {
+function renderAuthRoute(initialEntry: InitialEntry, page: 'login' | 'register') {
   const queryClient = new QueryClient({
     defaultOptions: {
       queries: { retry: false },
@@ -27,7 +26,7 @@ function renderAuthRoute(initialEntry: string, page: 'login' | 'register') {
       {
         path: '/app',
         element: <ProtectedRoute />,
-        children: [{ index: true, element: <AppHomePage /> }],
+        children: [{ index: true, element: <h1>Protected workspace</h1> }],
       },
       {
         element: <GuestRoute />,
@@ -98,6 +97,41 @@ describe('LoginPage', () => {
       expect(useAuthStore.getState().isAuthenticated()).toBe(true);
     });
     expect(screen.getByRole('heading', { name: 'Protected workspace' })).toBeInTheDocument();
+  });
+
+  it('ignores protocol-relative post-login redirects', async () => {
+    const user = userEvent.setup();
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          accessToken: 'access-token',
+          refreshToken: 'refresh-token',
+          accessTokenExpiresIn: 900,
+          tokenType: TOKEN_TYPE,
+          user: {
+            id: '507f1f77bcf86cd799439011',
+            username: 'alice',
+            displayName: 'Alice',
+            email: 'alice@example.com',
+            role: 'USER',
+            createdAt: '2026-08-18T00:00:00.000Z',
+            updatedAt: '2026-08-18T00:00:00.000Z',
+          },
+        }),
+        {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        },
+      ),
+    );
+
+    renderAuthRoute({ pathname: '/login', state: { from: '//evil.example' } }, 'login');
+
+    await user.type(screen.getByLabelText('Email'), 'alice@example.com');
+    await user.type(screen.getByLabelText('Password'), 'password123');
+    await user.click(screen.getByRole('button', { name: 'Sign in' }));
+
+    expect(await screen.findByRole('heading', { name: 'Protected workspace' })).toBeInTheDocument();
   });
 
   it('shows API errors from failed login attempts', async () => {

@@ -1,8 +1,10 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 
 import { AuthModule } from '../auth/auth.module.js';
+import { MessagesModule } from '../messages/messages.module.js';
 import { NotificationsModule } from '../notifications/notifications.module.js';
+import { RealtimeBroadcastModule } from '../realtime/realtime-broadcast.module.js';
 import { UsersPersistenceModule } from '../users/users-persistence.module.js';
 import { mongooseRoomMemberRepositoryProviders } from './infrastructure/mongoose-room-member.repository.js';
 import { mongooseRoomRepositoryProviders } from './infrastructure/mongoose-room.repository.js';
@@ -17,6 +19,8 @@ import { RoomsService } from './rooms.service.js';
     UsersPersistenceModule,
     AuthModule,
     NotificationsModule,
+    RealtimeBroadcastModule,
+    forwardRef(() => MessagesModule),
     MongooseModule.forFeature([
       { name: RoomDocument.name, schema: RoomSchema },
       { name: RoomMemberDocument.name, schema: RoomMemberSchema },

@@ -37,6 +37,15 @@ describe('realtime bus channel naming', () => {
     expect(channelForDistributedEvent(DISTRIBUTED_REALTIME_EVENTS.NOTIFICATION_NEW)).toBe(
       REALTIME_BUS_CHANNELS.NOTIFICATION,
     );
+    expect(channelForDistributedEvent(DISTRIBUTED_REALTIME_EVENTS.TYPING_STARTED)).toBe(
+      REALTIME_BUS_CHANNELS.TYPING,
+    );
+    expect(channelForDistributedEvent(DISTRIBUTED_REALTIME_EVENTS.TYPING_STOPPED)).toBe(
+      REALTIME_BUS_CHANNELS.TYPING,
+    );
+    expect(channelForDistributedEvent(DISTRIBUTED_REALTIME_EVENTS.MEMBER_REMOVED)).toBe(
+      REALTIME_BUS_CHANNELS.MEMBERSHIP,
+    );
   });
 
   it('uses the Socket.IO event names as distributed event names', () => {
@@ -53,6 +62,8 @@ describe('realtime bus channel naming', () => {
       REALTIME_BUS_CHANNELS.REACTION,
       REALTIME_BUS_CHANNELS.PRESENCE,
       REALTIME_BUS_CHANNELS.NOTIFICATION,
+      REALTIME_BUS_CHANNELS.TYPING,
+      REALTIME_BUS_CHANNELS.MEMBERSHIP,
     ]);
   });
 

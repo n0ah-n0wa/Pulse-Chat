@@ -27,6 +27,7 @@
     "lint": "eslint . --max-warnings 0",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:unit": "vitest run",
     "typecheck": "tsc -p tsconfig.json"
   },
   "devDependencies": {

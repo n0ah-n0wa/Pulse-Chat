@@ -28,6 +28,10 @@ export interface AttachmentRepository {
   findById(id: string): Promise<AttachmentRecord | null>;
   findByIds(ids: readonly string[]): Promise<AttachmentRecord[]>;
   findByStorageKey(storageKey: string): Promise<AttachmentRecord | null>;
-  linkToMessage(ids: readonly string[], messageId: string): Promise<void>;
+  /**
+   * Claims every id for `messageId`, or claims none if any id is already linked.
+   * Returns whether the full set was claimed.
+   */
+  linkToMessage(ids: readonly string[], messageId: string): Promise<boolean>;
   softDelete(id: string, deletedAt: Date): Promise<AttachmentRecord | null>;
 }

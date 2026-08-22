@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 
 import type { LoginInput } from '@pulse-chat/shared';
 
+import { safeInternalPath } from '../lib/safe-internal-path';
 import { authService } from '../services/auth-service';
 import { useAuthStore } from '../store/auth-store';
 
@@ -19,7 +20,7 @@ export function useLogin() {
     mutationFn: (input: LoginInput) => authService.login(input),
     onSuccess: (session) => {
       setSession(session);
-      const redirectTo = (location.state as LoginLocationState | null)?.from ?? '/app';
+      const redirectTo = safeInternalPath((location.state as LoginLocationState | null)?.from);
       void navigate(redirectTo, { replace: true });
     },
   });

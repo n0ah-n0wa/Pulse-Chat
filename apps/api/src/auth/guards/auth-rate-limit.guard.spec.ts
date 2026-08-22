@@ -4,8 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { API_ERROR_CODES } from '@pulse-chat/shared';
 
 import { ApiException } from '../../common/errors/api.exception.js';
-import type { AppConfigService } from '../../config/index.js';
-import type { RedisClient } from '../../infrastructure/redis/redis-client.interface.js';
+import type { RateLimitService } from '../../rate-limit/rate-limit.service.js';
 import { AuthRateLimitGuard } from './auth-rate-limit.guard.js';
 
 function createContext(path: string, ip = '127.0.0.1') {
@@ -21,27 +20,24 @@ function createContext(path: string, ip = '127.0.0.1') {
 }
 
 describe('AuthRateLimitGuard', () => {
-  const incrementWithTtl = vi.fn<RedisClient['incrementWithTtl']>();
-  const redis = { incrementWithTtl } as unknown as RedisClient;
-  const config = {
-    rateLimit: {
-      login: 5,
-      register: 5,
-      authWindowSeconds: 60,
-    },
-  } as AppConfigService;
-
-  const guard = new AuthRateLimitGuard(redis, config);
+  const consume = vi.fn<RateLimitService['consume']>();
+  const guard = new AuthRateLimitGuard({ consume } as unknown as RateLimitService);
 
   it('allows login attempts under the configured limit', async () => {
-    incrementWithTtl.mockResolvedValue(1);
+    consume.mockResolvedValue(undefined);
 
     await expect(guard.canActivate(createContext('/api/auth/login') as never)).resolves.toBe(true);
-    expect(incrementWithTtl).toHaveBeenCalledWith('rate-limit:auth:login:127.0.0.1', 60);
+    expect(consume).toHaveBeenCalledWith('login', '127.0.0.1');
   });
 
   it('rejects login attempts over the configured limit', async () => {
-    incrementWithTtl.mockResolvedValue(6);
+    consume.mockRejectedValue(
+      new ApiException(
+        API_ERROR_CODES.TOO_MANY_REQUESTS,
+        'Too many requests. Please try again later.',
+        HttpStatus.TOO_MANY_REQUESTS,
+      ),
+    );
 
     await expect(
       guard.canActivate(createContext('/api/auth/login') as never),
@@ -56,11 +52,31 @@ describe('AuthRateLimitGuard', () => {
   });
 
   it('uses a separate counter for registration', async () => {
-    incrementWithTtl.mockResolvedValue(1);
+    consume.mockResolvedValue(undefined);
 
     await expect(guard.canActivate(createContext('/api/auth/register') as never)).resolves.toBe(
       true,
     );
-    expect(incrementWithTtl).toHaveBeenCalledWith('rate-limit:auth:register:127.0.0.1', 60);
+    expect(consume).toHaveBeenCalledWith('register', '127.0.0.1');
+  });
+
+  it('rate-limits refresh and logout per IP', async () => {
+    consume.mockResolvedValue(undefined);
+
+    await expect(guard.canActivate(createContext('/api/auth/refresh') as never)).resolves.toBe(
+      true,
+    );
+    expect(consume).toHaveBeenCalledWith('refresh', '127.0.0.1');
+
+    consume.mockClear();
+    await expect(guard.canActivate(createContext('/api/auth/logout') as never)).resolves.toBe(true);
+    expect(consume).toHaveBeenCalledWith('logout', '127.0.0.1');
+  });
+
+  it('ignores unrelated paths', async () => {
+    consume.mockClear();
+
+    await expect(guard.canActivate(createContext('/api/auth/me') as never)).resolves.toBe(true);
+    expect(consume).not.toHaveBeenCalled();
   });
 });

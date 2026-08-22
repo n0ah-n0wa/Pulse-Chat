@@ -7,6 +7,13 @@
 **/coverage
 **/*.tsbuildinfo
 **/*.log
+playwright-report
+test-results
+e2e/.storage
+
+# Uploaded files from local FILE_STORAGE_PATH (not apps/api/src/.../storage)
+/storage
+apps/api/storage
 
 .git
 .github

@@ -15,7 +15,10 @@
     "lint": "turbo run lint",
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",
+    "test:unit": "turbo run test:unit",
+    "test:integration": "turbo run test:integration",
     "verify": "turbo run lint typecheck test build",
+    "test:e2e": "pnpm --filter @pulse-chat/shared build && pnpm --filter @pulse-chat/api build && pnpm --filter @pulse-chat/e2e test:e2e",
     "clean": "turbo run clean",
     "format": "prettier --write .",
     "format:check": "prettier --check ."

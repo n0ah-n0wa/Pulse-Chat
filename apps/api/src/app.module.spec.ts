@@ -36,7 +36,7 @@ describe('AppModule', () => {
 
     expect(config.nodeEnv).toBe('test');
     expect(config.mongodbUri).toContain('mongodb://');
-    expect(config.rateLimit.messages).toBe(20);
+    expect(config.rateLimit.messages).toBe(1000);
 
     await moduleRef.close();
   });

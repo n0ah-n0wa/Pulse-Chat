@@ -8,16 +8,11 @@ export function useRealtimeConnection(): void {
   const accessToken = useAuthStore((state) => state.accessToken);
 
   useEffect(() => {
-    const socketService = getSocketService();
-
-    if (accessToken !== null) {
-      socketService.connect(accessToken);
-    } else {
-      socketService.disconnect();
+    if (accessToken === null) {
+      getSocketService().disconnect();
+      return;
     }
 
-    return () => {
-      socketService.disconnect();
-    };
+    return getSocketService().acquireConnection(accessToken);
   }, [accessToken]);
 }

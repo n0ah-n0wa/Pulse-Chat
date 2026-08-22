@@ -1,4 +1,4 @@
-import type { MembershipRole, RoomMemberResponse, RoomResponse } from '@pulse-chat/shared';
+import type { RoomMemberResponse, RoomResponse } from '@pulse-chat/shared';
 
 import type { RoomMemberRecord } from './room-member.repository.interface.js';
 import type { RoomRecord } from './room.repository.interface.js';
@@ -8,7 +8,10 @@ function toIsoString(value: Date | undefined): string | undefined {
 }
 
 /** Maps a persisted room to the public API shape. */
-export function toRoomResponse(room: RoomRecord, currentUserRole?: MembershipRole): RoomResponse {
+export function toRoomResponse(
+  room: RoomRecord,
+  membership?: Pick<RoomMemberRecord, 'role' | 'lastReadMessageId' | 'lastReadAt'>,
+): RoomResponse {
   return {
     id: room.id,
     ...(room.name !== undefined && room.name.length > 0 ? { name: room.name } : {}),
@@ -19,7 +22,13 @@ export function toRoomResponse(room: RoomRecord, currentUserRole?: MembershipRol
     ...(room.ownerId !== undefined ? { ownerId: room.ownerId } : {}),
     createdAt: room.createdAt.toISOString(),
     updatedAt: room.updatedAt.toISOString(),
-    ...(currentUserRole !== undefined ? { currentUserRole } : {}),
+    ...(membership?.role !== undefined ? { currentUserRole: membership.role } : {}),
+    ...(membership?.lastReadMessageId !== undefined
+      ? { lastReadMessageId: membership.lastReadMessageId }
+      : {}),
+    ...(membership?.lastReadAt !== undefined
+      ? { lastReadAt: membership.lastReadAt.toISOString() }
+      : {}),
   };
 }
 

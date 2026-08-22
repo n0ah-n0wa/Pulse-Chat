@@ -4,6 +4,7 @@ import {
   AUTH_ERROR_CODES,
   TOKEN_TYPE,
   USER_ERROR_CODES,
+  type AuthErrorCode,
   type AuthSessionResponse,
   type AuthTokensResponse,
   type CurrentUserProfile,
@@ -12,6 +13,7 @@ import {
 } from '@pulse-chat/shared';
 
 import { ApiException } from '../common/errors/api.exception.js';
+import { StructuredLoggerService } from '../infrastructure/logging/structured-logger.service.js';
 import { toCurrentUserProfile } from '../users/user-profile.mapper.js';
 import type { UserRecord, UserRepository } from '../users/user.repository.interface.js';
 import { USER_REPOSITORY } from '../users/users.tokens.js';
@@ -34,6 +36,13 @@ import {
  */
 const DUMMY_PASSWORD_HASH = '$2b$12$t8Z4vLtbEoq/vMkN8XmXJuUSJbjCC2zEWfhpKgxWaJ6tPK4BfVh6u';
 
+/**
+ * Concurrent refresh of the same token looks identical to reuse. Tokens
+ * revoked inside this window are treated as a lost race, not theft, so the
+ * newly issued family member is not wiped.
+ */
+export const REFRESH_REUSE_GRACE_MS = 10_000;
+
 @Injectable()
 export class AuthService {
   constructor(
@@ -41,6 +50,7 @@ export class AuthService {
     @Inject(REFRESH_TOKEN_REPOSITORY) private readonly refreshTokens: RefreshTokenRepository,
     @Inject(PASSWORD_HASHER) private readonly passwordHasher: PasswordHasher,
     private readonly tokenService: TokenService,
+    private readonly logger: StructuredLoggerService,
   ) {}
 
   async register(input: RegisterInput): Promise<AuthSessionResponse> {
@@ -84,10 +94,10 @@ export class AuthService {
     const passwordMatches = await this.passwordHasher.verify(input.password, passwordHash);
 
     if (user === null || !passwordMatches) {
-      throw new ApiException(
+      this.throwAuthFailure(
         AUTH_ERROR_CODES.INVALID_CREDENTIALS,
         'Invalid email or password.',
-        HttpStatus.UNAUTHORIZED,
+        'invalid_credentials',
       );
     }
 
@@ -104,10 +114,11 @@ export class AuthService {
 
     if (!refreshTokenHashEquals(claimed.tokenHash, refreshToken)) {
       await this.refreshTokens.revokeFamily(claimed.familyId);
-      throw new ApiException(
+      this.throwAuthFailure(
         AUTH_ERROR_CODES.INVALID_REFRESH_TOKEN,
         'Refresh token is invalid.',
-        HttpStatus.UNAUTHORIZED,
+        'invalid_refresh_token',
+        claimed.userId,
       );
     }
 
@@ -115,10 +126,11 @@ export class AuthService {
 
     if (user === null) {
       await this.refreshTokens.revokeFamily(claimed.familyId);
-      throw new ApiException(
+      this.throwAuthFailure(
         AUTH_ERROR_CODES.INVALID_REFRESH_TOKEN,
         'Refresh token is invalid.',
-        HttpStatus.UNAUTHORIZED,
+        'invalid_refresh_token',
+        payload.sub,
       );
     }
 
@@ -192,25 +204,30 @@ export class AuthService {
 
     if (stored !== null && refreshTokenHashEquals(stored.tokenHash, refreshToken)) {
       if (stored.expiresAt.getTime() <= Date.now() && stored.revokedAt === undefined) {
-        throw new ApiException(
+        this.throwAuthFailure(
           AUTH_ERROR_CODES.TOKEN_EXPIRED,
           'Refresh token has expired.',
-          HttpStatus.UNAUTHORIZED,
+          'token_expired',
+          stored.userId,
         );
       }
 
-      await this.refreshTokens.revokeFamily(stored.familyId);
-      throw new ApiException(
+      if (stored.revokedAt === undefined || !isWithinRefreshReuseGrace(stored.revokedAt)) {
+        await this.refreshTokens.revokeFamily(stored.familyId);
+      }
+
+      this.throwAuthFailure(
         AUTH_ERROR_CODES.REFRESH_TOKEN_REVOKED,
         'Refresh token has been revoked.',
-        HttpStatus.UNAUTHORIZED,
+        'refresh_token_revoked',
+        stored.userId,
       );
     }
 
-    throw new ApiException(
+    this.throwAuthFailure(
       AUTH_ERROR_CODES.INVALID_REFRESH_TOKEN,
       'Refresh token is invalid.',
-      HttpStatus.UNAUTHORIZED,
+      'invalid_refresh_token',
     );
   }
 
@@ -219,19 +236,33 @@ export class AuthService {
       return this.tokenService.verifyRefreshToken(refreshToken);
     } catch (error) {
       if (error instanceof TokenVerificationError && error.code === 'TOKEN_EXPIRED') {
-        throw new ApiException(
+        this.throwAuthFailure(
           AUTH_ERROR_CODES.TOKEN_EXPIRED,
           'Refresh token has expired.',
-          HttpStatus.UNAUTHORIZED,
+          'token_expired',
         );
       }
 
-      throw new ApiException(
+      this.throwAuthFailure(
         AUTH_ERROR_CODES.INVALID_REFRESH_TOKEN,
         'Refresh token is invalid.',
-        HttpStatus.UNAUTHORIZED,
+        'invalid_refresh_token',
       );
     }
+  }
+
+  private throwAuthFailure(
+    code: AuthErrorCode,
+    message: string,
+    reason: string,
+    userId?: string,
+  ): never {
+    this.logger.warn('auth.failure', {
+      reason,
+      code,
+      ...(userId === undefined ? {} : { userId }),
+    });
+    throw new ApiException(code, message, HttpStatus.UNAUTHORIZED);
   }
 
   private rethrowDuplicateUserError(error: unknown): void {
@@ -261,4 +292,8 @@ export class AuthService {
       }
     }
   }
+}
+
+function isWithinRefreshReuseGrace(revokedAt: Date): boolean {
+  return Date.now() - revokedAt.getTime() <= REFRESH_REUSE_GRACE_MS;
 }

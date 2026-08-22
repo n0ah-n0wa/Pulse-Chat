@@ -22,9 +22,14 @@ const DEFAULTS = {
   FILE_STORAGE_PROVIDER: 'local',
   FILE_STORAGE_PATH: './storage',
   RATE_LIMIT_MESSAGES: '20',
+  RATE_LIMIT_MESSAGES_WINDOW_SECONDS: '10',
   RATE_LIMIT_LOGIN: '5',
   RATE_LIMIT_REGISTER: '5',
   RATE_LIMIT_AUTH_WINDOW_SECONDS: '60',
+  RATE_LIMIT_SEARCH: '30',
+  RATE_LIMIT_SEARCH_WINDOW_SECONDS: '60',
+  RATE_LIMIT_UPLOADS: '10',
+  RATE_LIMIT_UPLOADS_WINDOW_SECONDS: '60',
 } as const;
 
 const nodeEnvSchema = z.enum(['development', 'test', 'production']);
@@ -34,6 +39,11 @@ const durationSchema = z
   .trim()
   .min(1, 'must be a duration such as 15m, 1h or 30d')
   .regex(/^\d+[smhd]$/, 'must be a duration such as 15m, 1h or 30d');
+
+const positiveIntSchema = z.coerce
+  .number()
+  .int('must be an integer')
+  .positive('must be greater than zero');
 
 const fileStorageProviderSchema = z.enum(['local', 's3']);
 
@@ -130,22 +140,15 @@ function buildSchema(nodeEnv: NodeEnv) {
       [ENV_KEYS.CORS_ORIGIN]: corsOriginSchema,
       [ENV_KEYS.FILE_STORAGE_PROVIDER]: fileStorageProviderSchema,
       [ENV_KEYS.FILE_STORAGE_PATH]: z.string().trim().optional(),
-      [ENV_KEYS.RATE_LIMIT_MESSAGES]: z.coerce
-        .number()
-        .int('must be an integer')
-        .positive('must be greater than zero'),
-      [ENV_KEYS.RATE_LIMIT_LOGIN]: z.coerce
-        .number()
-        .int('must be an integer')
-        .positive('must be greater than zero'),
-      [ENV_KEYS.RATE_LIMIT_REGISTER]: z.coerce
-        .number()
-        .int('must be an integer')
-        .positive('must be greater than zero'),
-      [ENV_KEYS.RATE_LIMIT_AUTH_WINDOW_SECONDS]: z.coerce
-        .number()
-        .int('must be an integer')
-        .positive('must be greater than zero'),
+      [ENV_KEYS.RATE_LIMIT_MESSAGES]: positiveIntSchema,
+      [ENV_KEYS.RATE_LIMIT_MESSAGES_WINDOW_SECONDS]: positiveIntSchema,
+      [ENV_KEYS.RATE_LIMIT_LOGIN]: positiveIntSchema,
+      [ENV_KEYS.RATE_LIMIT_REGISTER]: positiveIntSchema,
+      [ENV_KEYS.RATE_LIMIT_AUTH_WINDOW_SECONDS]: positiveIntSchema,
+      [ENV_KEYS.RATE_LIMIT_SEARCH]: positiveIntSchema,
+      [ENV_KEYS.RATE_LIMIT_SEARCH_WINDOW_SECONDS]: positiveIntSchema,
+      [ENV_KEYS.RATE_LIMIT_UPLOADS]: positiveIntSchema,
+      [ENV_KEYS.RATE_LIMIT_UPLOADS_WINDOW_SECONDS]: positiveIntSchema,
     })
     .superRefine((values, ctx) => {
       if (values[ENV_KEYS.FILE_STORAGE_PROVIDER] === 'local') {
@@ -207,9 +210,14 @@ function toAppConfig(raw: z.infer<ReturnType<typeof buildSchema>>): AppConfig {
     },
     rateLimit: {
       messages: raw[ENV_KEYS.RATE_LIMIT_MESSAGES],
+      messagesWindowSeconds: raw[ENV_KEYS.RATE_LIMIT_MESSAGES_WINDOW_SECONDS],
       login: raw[ENV_KEYS.RATE_LIMIT_LOGIN],
       register: raw[ENV_KEYS.RATE_LIMIT_REGISTER],
       authWindowSeconds: raw[ENV_KEYS.RATE_LIMIT_AUTH_WINDOW_SECONDS],
+      search: raw[ENV_KEYS.RATE_LIMIT_SEARCH],
+      searchWindowSeconds: raw[ENV_KEYS.RATE_LIMIT_SEARCH_WINDOW_SECONDS],
+      uploads: raw[ENV_KEYS.RATE_LIMIT_UPLOADS],
+      uploadsWindowSeconds: raw[ENV_KEYS.RATE_LIMIT_UPLOADS_WINDOW_SECONDS],
     },
   };
 }
@@ -296,6 +304,9 @@ export function createTestConfig(
     CORS_ORIGIN: 'http://localhost:5173',
     RATE_LIMIT_LOGIN: '1000',
     RATE_LIMIT_REGISTER: '1000',
+    RATE_LIMIT_MESSAGES: '1000',
+    RATE_LIMIT_SEARCH: '1000',
+    RATE_LIMIT_UPLOADS: '1000',
     ...overrides,
   });
 }

@@ -18,11 +18,18 @@ out/
 coverage/
 test-results/
 playwright-report/
+e2e/.storage/
+
+# Local attachment/avatar files (FILE_STORAGE_PATH). Do not use a blanket
+# **/storage/ pattern: the API source lives under infrastructure/storage/.
+/storage/
+/apps/api/storage/
 
 # Environment (never commit secrets; commit *.example files instead)
 .env
 .env.*
 !.env.example
+!.env.production.example
 
 # TLS inspection roots used for local image builds: generated per machine,
 # see infrastructure/docker/certs/README.md

@@ -10,9 +10,21 @@ import type {
   CreateAttachmentRecordInput,
 } from '../attachment.repository.interface.js';
 import { ATTACHMENT_REPOSITORY } from '../attachments.tokens.js';
-import { AttachmentDocument, type AttachmentDocumentHydrated } from './attachment.schema.js';
+import { AttachmentDocument } from './attachment.schema.js';
 
-function toAttachmentRecord(document: AttachmentDocumentHydrated): AttachmentRecord {
+function toAttachmentRecord(document: {
+  readonly _id: Types.ObjectId;
+  readonly roomId: Types.ObjectId;
+  readonly uploaderId: Types.ObjectId;
+  readonly storageKey: string;
+  readonly filename: string;
+  readonly mimeType: string;
+  readonly sizeBytes: number;
+  readonly messageId?: Types.ObjectId | null;
+  readonly deletedAt?: Date;
+  readonly createdAt: Date;
+  readonly updatedAt: Date;
+}): AttachmentRecord {
   return {
     id: document._id.toHexString(),
     roomId: objectIdToString(document.roomId),
@@ -56,7 +68,7 @@ export class MongooseAttachmentRepository implements AttachmentRepository {
       return null;
     }
 
-    const document = await this.attachmentModel.findById(id).exec();
+    const document = await this.attachmentModel.findById(id).lean().exec();
     return document ? toAttachmentRecord(document) : null;
   }
 
@@ -66,31 +78,54 @@ export class MongooseAttachmentRepository implements AttachmentRepository {
       return [];
     }
 
-    const documents = await this.attachmentModel.find({ _id: { $in: validIds } }).exec();
+    const documents = await this.attachmentModel
+      .find({ _id: { $in: validIds } })
+      .lean()
+      .exec();
     return documents.map((document) => toAttachmentRecord(document));
   }
 
   async findByStorageKey(storageKey: string): Promise<AttachmentRecord | null> {
-    const document = await this.attachmentModel.findOne({ storageKey }).exec();
+    const document = await this.attachmentModel.findOne({ storageKey }).lean().exec();
     return document ? toAttachmentRecord(document) : null;
   }
 
-  async linkToMessage(ids: readonly string[], messageId: string): Promise<void> {
+  async linkToMessage(ids: readonly string[], messageId: string): Promise<boolean> {
     const validIds = ids.filter((id) => isValidObjectId(id)).map((id) => new Types.ObjectId(id));
     if (validIds.length === 0) {
-      return;
+      return true;
     }
 
-    await this.attachmentModel
-      .updateMany(
-        {
-          _id: { $in: validIds },
-          messageId: { $exists: false },
-          deletedAt: { $exists: false },
-        },
-        { $set: { messageId: new Types.ObjectId(messageId) } },
-      )
-      .exec();
+    const messageObjectId = new Types.ObjectId(messageId);
+    const claimed: Types.ObjectId[] = [];
+
+    for (const id of validIds) {
+      const document = await this.attachmentModel
+        .findOneAndUpdate(
+          {
+            _id: id,
+            messageId: { $exists: false },
+            deletedAt: { $exists: false },
+          },
+          { $set: { messageId: messageObjectId } },
+          { new: true },
+        )
+        .exec();
+
+      if (document === null) {
+        if (claimed.length > 0) {
+          await this.attachmentModel
+            .updateMany({ _id: { $in: claimed } }, { $unset: { messageId: 1 } })
+            .exec();
+        }
+
+        return false;
+      }
+
+      claimed.push(id);
+    }
+
+    return true;
   }
 
   async softDelete(id: string, deletedAt: Date): Promise<AttachmentRecord | null> {

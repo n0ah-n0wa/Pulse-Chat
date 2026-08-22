@@ -1,0 +1,225 @@
+# Production stack: docker compose -f docker-compose.prod.yml up --build
+#
+# Two API instances sit behind nginx so Redis Pub/Sub is the only path that
+# carries realtime events between Socket.IO processes. MongoDB and Redis require
+# authentication and are not published to the host. Secrets are interpolated
+# from the environment (see .env.production.example); the defaults below exist
+# so `docker compose -f docker-compose.prod.yml config` and a local demo can
+# run without extra setup. Replace them before any real deployment.
+#
+# Do not reuse the development `.env` MongoDB/Redis URLs: those have no
+# credentials. This file constructs authenticated URIs from PULSE_* variables.
+
+name: pulse-chat-prod
+
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: '10m'
+    max-file: '3'
+
+x-api-image: &api-image
+  build:
+    context: .
+    dockerfile: infrastructure/docker/api.Dockerfile
+    target: production
+  image: pulse-chat-api:local
+
+x-api-environment: &api-environment
+  NODE_ENV: production
+  PORT: '3000'
+  MONGODB_URI: mongodb://${PULSE_MONGO_USER:-pulse}:${PULSE_MONGO_PASSWORD:-pulse-prod-mongo-change-me}@mongodb:27017/pulse_chat?authSource=admin
+  REDIS_URL: redis://:${PULSE_REDIS_PASSWORD:-pulse-prod-redis-change-me}@redis:6379
+  JWT_ACCESS_SECRET: ${PULSE_JWT_ACCESS_SECRET:-pulse-chat-prod-demo-jwt-access-secret-min-32-chars}
+  JWT_REFRESH_SECRET: ${PULSE_JWT_REFRESH_SECRET:-pulse-chat-prod-demo-jwt-refresh-secret-min-32-chars}
+  JWT_ACCESS_EXPIRES_IN: ${PULSE_JWT_ACCESS_EXPIRES_IN:-15m}
+  JWT_REFRESH_EXPIRES_IN: ${PULSE_JWT_REFRESH_EXPIRES_IN:-30d}
+  CORS_ORIGIN: ${PULSE_PUBLIC_ORIGIN:-http://localhost:8080}
+  FILE_STORAGE_PROVIDER: local
+  FILE_STORAGE_PATH: /var/lib/pulse-chat/storage
+  RATE_LIMIT_LOGIN: '5'
+  RATE_LIMIT_REGISTER: '5'
+  RATE_LIMIT_AUTH_WINDOW_SECONDS: '60'
+  RATE_LIMIT_MESSAGES: '20'
+  RATE_LIMIT_MESSAGES_WINDOW_SECONDS: '10'
+  RATE_LIMIT_SEARCH: '30'
+  RATE_LIMIT_SEARCH_WINDOW_SECONDS: '60'
+  RATE_LIMIT_UPLOADS: '10'
+  RATE_LIMIT_UPLOADS_WINDOW_SECONDS: '60'
+
+x-api-service: &api-service
+  <<: *api-image
+  restart: unless-stopped
+  logging: *default-logging
+  init: true
+  stop_grace_period: 20s
+  security_opt:
+    - no-new-privileges:true
+  environment: *api-environment
+  env_file:
+    - path: .env.production
+      required: false
+  volumes:
+    - api-storage:/var/lib/pulse-chat/storage
+  expose:
+    - '3000'
+  networks:
+    frontend:
+    backend:
+  healthcheck:
+    test:
+      [
+        'CMD',
+        'node',
+        '-e',
+        "fetch('http://127.0.0.1:3000/health/readiness').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+      ]
+    interval: 10s
+    timeout: 5s
+    retries: 12
+    start_period: 25s
+  depends_on:
+    mongodb:
+      condition: service_healthy
+    redis:
+      condition: service_healthy
+
+services:
+  mongodb:
+    image: mongo:8.0
+    restart: unless-stopped
+    logging: *default-logging
+    command:
+      - mongod
+      - --bind_ip_all
+      - --wiredTigerCacheSizeGB=0.5
+    environment:
+      MONGO_INITDB_DATABASE: pulse_chat
+      MONGO_INITDB_ROOT_USERNAME: ${PULSE_MONGO_USER:-pulse}
+      MONGO_INITDB_ROOT_PASSWORD: ${PULSE_MONGO_PASSWORD:-pulse-prod-mongo-change-me}
+    volumes:
+      - mongodb-data:/data/db
+    networks:
+      - backend
+    healthcheck:
+      test:
+        [
+          'CMD-SHELL',
+          'mongosh --quiet -u "$$MONGO_INITDB_ROOT_USERNAME" -p "$$MONGO_INITDB_ROOT_PASSWORD" --authenticationDatabase admin --eval "db.adminCommand(''ping'').ok"',
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 25s
+
+  redis:
+    image: redis:8.10-alpine
+    restart: unless-stopped
+    logging: *default-logging
+    # Presence, typing, rate-limit counters and Pub/Sub fan-out are ephemeral.
+    # Persistence stays off so a restart does not resurrect stale presence keys.
+    command:
+      - redis-server
+      - --requirepass
+      - ${PULSE_REDIS_PASSWORD:-pulse-prod-redis-change-me}
+      - --save
+      - ''
+      - --appendonly
+      - 'no'
+      - --maxmemory
+      - 256mb
+      - --maxmemory-policy
+      - noeviction
+    environment:
+      REDISCLI_AUTH: ${PULSE_REDIS_PASSWORD:-pulse-prod-redis-change-me}
+    networks:
+      - backend
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 10s
+      timeout: 3s
+      retries: 12
+      start_period: 5s
+
+  api-1:
+    <<: *api-service
+    hostname: api-1
+
+  api-2:
+    <<: *api-service
+    hostname: api-2
+
+  web:
+    build:
+      context: .
+      dockerfile: infrastructure/docker/web.Dockerfile
+      target: production
+    image: pulse-chat-web:local
+    restart: unless-stopped
+    logging: *default-logging
+    security_opt:
+      - no-new-privileges:true
+    expose:
+      - '80'
+    networks:
+      - frontend
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'wget',
+          '--quiet',
+          '--tries=1',
+          '--spider',
+          'http://127.0.0.1/nginx-health',
+        ]
+      interval: 10s
+      timeout: 3s
+      retries: 6
+      start_period: 5s
+
+  nginx:
+    image: nginx:1.30-alpine
+    restart: unless-stopped
+    logging: *default-logging
+    security_opt:
+      - no-new-privileges:true
+    depends_on:
+      api-1:
+        condition: service_healthy
+      api-2:
+        condition: service_healthy
+      web:
+        condition: service_healthy
+    ports:
+      - '127.0.0.1:8080:80'
+    volumes:
+      - ./infrastructure/nginx/prod.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./infrastructure/nginx/proxy-headers.conf:/etc/nginx/proxy-headers.conf:ro
+      - ./infrastructure/nginx/security-headers.conf:/etc/nginx/security-headers.conf:ro
+    networks:
+      - frontend
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'wget',
+          '--quiet',
+          '--tries=1',
+          '--spider',
+          'http://127.0.0.1/nginx-health',
+        ]
+      interval: 10s
+      timeout: 3s
+      retries: 6
+      start_period: 5s
+
+networks:
+  frontend:
+    driver: bridge
+  backend:
+    driver: bridge
+
+volumes:
+  mongodb-data:
+  api-storage:
