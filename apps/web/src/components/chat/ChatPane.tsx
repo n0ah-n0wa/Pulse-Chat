@@ -114,7 +114,7 @@ export function ChatPane({ roomId }: ChatPaneProps) {
       ids.push(user.id);
     }
     return ids;
-  }, [messages, replyTo, roomQuery.data, typingUserIds, user?.id]);
+  }, [messages, replyTo, roomQuery.data, typingUserIds, user]);
 
   const authors = useAuthorProfiles(authorIds);
 
