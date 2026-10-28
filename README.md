@@ -1,5 +1,7 @@
 # Pulse Chat
 
+[![CI](https://github.com/n0ah-n0wa/Pulse-Chat/actions/workflows/ci.yml/badge.svg)](https://github.com/n0ah-n0wa/Pulse-Chat/actions/workflows/ci.yml)
+
 A production-shaped real-time chat platform: persistent rooms, Socket.IO messaging,
 and an API that is designed to run as more than one process. Redis Pub/Sub is the
 cross-instance event bus; MongoDB holds durable data; Nginx is the single browser
