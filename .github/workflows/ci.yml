@@ -69,6 +69,11 @@ jobs:
     services:
       mongodb:
         image: mongo:8.0
+        # mongo:8.0.21–8.0.34 refuse to start on ubuntu-latest kernels 6.19+
+        # (SERVER-121912 / TCMalloc rseq). This restores the previous rseq
+        # behaviour so mongod can boot; drop it once 8.0.35+ is the 8.0 tag.
+        env:
+          GLIBC_TUNABLES: glibc.pthread.rseq=1
         ports:
           - 27017:27017
         options: >-
